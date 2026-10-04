@@ -1,7 +1,7 @@
 // The simulation: scrolling, the player, shots, enemies, bullets, items, bombs and the boss.
 import { W, H } from './draw';
 import { Enemy, EnemyDef, ItemKind, makeEnemy, gone } from './enemies';
-import { Bullet } from './bullets';
+import { Bullet, ring } from './bullets';
 import { Boss } from './boss';
 import { Terrain } from './terrain';
 import { STAGES } from './stages';
@@ -417,7 +417,7 @@ export class World {
     }
     let best: Enemy | null = null, bd = Infinity;
     for (const e of this.enemies) {
-      if (e.dead || e.armored || e.y < -10) continue;
+      if (e.dead || e.armored || e.hidden || e.y < -10) continue;
       const d = Math.hypot(e.x - s.x, e.y - s.y);
       if (d < bd) (bd = d), (best = e);
     }
@@ -483,13 +483,23 @@ export class World {
   // ---------- bullets ----------
 
   private updateBullets() {
+    const bursting: Bullet[] = [];
     for (const b of this.bullets) {
       b.x += b.vx;
       b.y += b.vy;
       b.t++;
       if (b.x < -8 || b.x > W + 8 || b.y < -8 || b.y > H + 8) b.dead = true;
+      if (b.life !== undefined && b.t >= b.life) b.dead = true;
+      if (b.burst !== undefined && b.t >= b.burst && !b.dead) {
+        b.dead = true;
+        bursting.push(b);
+      }
     }
     this.bullets = this.bullets.filter((b) => !b.dead);
+    for (const b of bursting) {
+      ring(this, b.x, b.y, 8 + this.loop * 2, 1.2, b.t / 9);
+      this.particles.push({ x: b.x, y: b.y, vx: 0, vy: 0, life: 8, color: '#f8d838' });
+    }
   }
 
   // ---------- items ----------
@@ -618,7 +628,7 @@ export class World {
   private collide() {
     for (const s of this.shots) {
       for (const e of this.enemies) {
-        if (e.dead || s.dead) continue;
+        if (e.dead || s.dead || e.hidden) continue;
         const half = s.kind === 'laser' ? s.width! / 2 : 2;
         const r = e.r ?? e.def.r;
         // Armour stops only what is really inside it; targets get a generous box.

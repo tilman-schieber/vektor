@@ -253,3 +253,67 @@ Grid description: "flat rooftop prop on a dark city building roof at night, seen
 | decor/city_garden.png | 56 | Planters with a small greenhouse. |
 
 Lessons: (1) With an img2img layout sketch, strength ~60 is the sweet spot for adding real detail while keeping the layout. Above ~100 the output only traces a flat sketch. (2) Inpaint accepts `image_url` = the pixflux job's download URL, which avoids pasting large base64. When post-processing changes the image, inpaint the raw output and paste only the mask box back with the same offset. (3) The 1-direction grid accepts mixed item types in one 64-grid, which gave the heli, hatch, rail car and locomotive candidates for 20 generations. Rail cars come out at about 18x31, so non-square sprites need row stretching.
+
+---
+
+# Stage 5 (volcano: lava river, ash plain, crater fortress)
+
+Generations spent: 70 (balance went from 962 to 892). Palette: black and dark-grey basalt, ash grey, molten orange and yellow lava, dark red-black fortress metal, and dark iron enemies with orange glow accents. Layout sketches and previews were made with PIL in the session scratchpad and are not kept in the repo. All sprites are RGBA with no partial alpha. Re-centring uses integer shifts only, and the boat was stretched only by duplicating whole rows.
+
+## Tilesets (create_topdown_tileset, 16px, high top-down, single color outline, medium shading, medium detail, standard mode)
+
+| file | tileset id | lower → upper | transition | notes |
+|---|---|---|---|---|
+| tiles/lava_basalt.png/.json/_example.png | ac6e5671-a185-4a3a-af22-11e6d77b6c90 | "glowing molten lava, bright orange and yellow with dark crust cracks" → "dark cracked basalt rock" | "cooling black crust edge with glowing cracks", **round**, 0.5 | Bright lava with a crust-plate pattern. The basalt is raised, with orange veins in the cliff faces. |
+| tiles/basalt_ash.png/.json/_example.png | ac0995cd-7ab8-4e3f-8f58-da936a277206 | basalt (lower_base dfbe096d…) → "grey volcanic ash plain with scattered cinders" | "drifted grey ash over dark rock, soft irregular organic edge", **round**, 0.5 | The ash came out warm grey-beige, and the cinders are barely visible. The ash is raised over the rock. |
+| tiles/ash_fortress.png/.json/_example.png | fd826637-1b62-479f-b141-fc370d0a1400 | ash (lower_base c35b50bc…) → "dark red-black armoured fortress plating with glowing orange vents" | "heavy dark iron fortress wall edge with glowing orange vent slits", **square**, 0.25, text_guidance 10 | Maroon plate grid inside a dark iron wall, with glowing orange vents on the wall faces. The all-fortress tile has no vents and is more red than black. |
+
+Base tile ids:
+- lava: `7acbaa63-0d9a-4922-a0b6-e4de0b264317`
+- basalt (upper of lava_basalt, lower of basalt_ash): `dfbe096d-a27f-41aa-b8a4-e5ac8d523059`. It is pixel-identical in both sheets (max diff 0).
+- ash (upper of basalt_ash, lower of ash_fortress): `c35b50bc-c25b-41d9-8b64-203373355811`. It differs by at most 2 per channel. The all-ash tile is at x0 y48 in basalt_ash.png.
+- fortress plating: `e66bf642-1570-45ab-90f7-2a8a1e21e7e2`
+
+## Enemies (one 64-candidate create_1_direction_object grid at 32px, style ref = enemies/carrier.png, review 17f1073a…; tag `volcano_enemies`)
+
+Grid description: "hostile volcanic military unit seen from directly above, facing down, dark iron armor with orange glowing heat accents, black outline, medium shading". It used 16 heli items, 10 rock turrets, 12 closed silos, 16 boats, 8 rockets and 2 open silos.
+
+| path | source | size | notes |
+|---|---|---|---|
+| enemies/lavaboat.png | frame 46 ("heavy iron barge boat from above … bow at the bottom … round turret base in the centre without barrel") | 24x40 | Bow down. Cropped to x4-27, then stretched from 31 to 39 rows by duplicating rows 3, 6, 7, 8 (x2), 21, 25 and 27. The generated black hole in the turret ring was painted over as a dark iron mount with an orange centre pixel. **Turret centre (11.5,17.5)**: the ring spans x8-15, y14-21. The sprite occupies x5-18, y1-39. |
+| enemies/magma_turret.png | frame 16 ("rock crusted round gun turret mount … black basalt rock shell with glowing orange lava seams") | 24x24 | The 28px sprite was nearest-neighbour decimated to 22px (rows/cols 2, 6, 10, 17, 21 and 25 dropped) and padded by 1. Some of the thin cracks are thinner or broken. Mount centre **(11.5,11.5)**. There is no barrel. |
+| enemies/silo_closed.png | frame 26 ("round missile silo … closed circular blast doors split in two halves … orange warning stripes, glowing orange seam") | 32x32 | Used as generated. The disc is centred at (15.5,16). |
+| enemies/silo_open.png | drawn by hand (PIL) on silo_closed | 32x32 | The RGB difference from the closed silo is confined to x7-24, y7-25, the door disc with r ≤ 9.4 around (15.5,16). It contains a dark pit with an orange heat ring and a missile seen from above: a fin cross, a grey body disc and a red warhead. The tip is at **(15.5,15.5)**. |
+| enemies/rocket.png | drawn by hand (PIL) | 16x16 | Points down. The 2px grey body runs along x7-8, the fin cross sits at y3-6, there is an orange band at y8, and the red nose is at y13-14. Symmetric about x=7.5, bbox x3-12, y1-14. The grid rockets (frames 54-61) were 12x24 and too long for 16px. |
+
+## Stage-4 redo
+
+| path | source | notes |
+|---|---|---|
+| enemies/heli.png | volcano grid frame 0 ("sleek slim attack helicopter fuselage … without rotor blades … short stub wings with rocket pods, long thin tail boom pointing up, dark gunmetal grey, red lights") | 32x32. Slim fuselage with the canopy at the bottom (nose down), stub wings with rocket pods at y≈20-25, and the tail boom and fin at the top. A 4px dark rotor hub was hand-drawn at **(15.5,15.5)** (pixels 14-17). Non-outline pixels were brightened by ×1.3 + 8, and the red lights by ×1.5, so that it reads on the dark street_roof tiles. The old bulky heli is in the session scratchpad backup only. Frame 8 (object 3cb92daa…) is an alternative. |
+
+## Boss
+
+| path | tool | prompt | seed | size | id | notes |
+|---|---|---|---|---|---|---|
+| boss/boss5.png | create_image_pixflux img2img (init = detailed PIL sketch on an opaque grey background: octagonal hull, petal dome, 2 flame mounts in square housings, 2 missile racks of 4x2 tubes, a centre grille, vents and buttresses; **init_image_strength 170**, no_background false, detailed shading, highly detailed) | "top-down view of a giant volcanic crater fortress boss seen from directly above, facing down, massive round closed armored dome made of segmented petal plates in the centre, two round flame cannon turret mounts on the left and right flanks without barrels, two rectangular missile rack blocks with rows of missile tubes lower left and lower right, heavy armored walls and buttresses around, dark red-black metal deck plates, panel lines, rivets, glowing orange vents and seams, symmetrical, arcade shmup boss" | 512 | 144x128 | job 57783cfe-430e-44fa-a767-5cfcb5a3afdd | Post-processing: the grey background was flood-filled away, the image was cut to the octagon hull polygon (which also removed the side buttresses and two exhaust stubs) and given a 1px dark outline. The bbox is x4-140, y4-124. Coordinates: **dome centre (72,54)** (r 25, orange ring r 27); **flame cannon mounts (27,52) and (117,52)** (glowing r≈3 core, 22px mounts in 30x34 housings); **missile racks centred (40,97) and (104,97)** (block x24-56 / x88-120, y85-109; tubes in 2 rows at y≈93 and y≈101). A launch point at the rack's front edge would be (40,108) / (104,108). With `no_background: true` the model made the deck transparent (seeds 501-503). Seeds 504 and 505 (strength 60/80 on a plain sketch) and seed 511 (110) were flatter or lost the layout. |
+| boss/boss5_open.png | inpaint_image on the raw pixflux output (job URL), mask x47 y29 w51 h51 | "the round armored dome split open, its segmented petal plates folded back to the rim, revealing a round glowing magma core inside, bright yellow-white molten center surrounded by orange and red glowing lava rings, dark metal frame around the open pit, top-down view" | 7 | 144x128 | job cca153b8-d012-466e-a583-2e20b416ecdf | Only the circle with r ≤ 25.6 around (72,54) was pasted onto boss5.png, so the orange dome ring and the deck stay identical. The RGB difference is confined to x47-97, y29-79. **Magma core centre (71.5,58.5)**: the bright yellow-white blob spans x64-79, y51-66, about 4px below the dome centre. |
+
+## Decor (ash-plain props, 32x32; one 64-grid create_1_direction_object at size 32, no style ref, review e1689801…; tag `volcano_decor`)
+
+Grid description: "flat ground prop on a grey volcanic ash plain seen from directly above, top-down, black basalt, ash grey, charred, glowing orange lava and embers accents, black outline, medium shading, no shadow". There were 4 items per prop across 16 props. Clusters of 3px or fewer were removed, and each prop was re-centred by an integer shift.
+
+| path | frame | notes |
+|---|---|---|
+| decor/volcano_steamvent.png | 2 | A black rock cone with a glowing vent and a white steam puff, in a slight 3/4 view. |
+| decor/volcano_crater.png | 14 | A scorched crater with radiating orange cracks. |
+| decor/volcano_stumps.png | 21 | Charred trunks and a fallen log. |
+| decor/volcano_boulders.png | 29 | Basalt boulders with faint orange cracks. |
+| decor/volcano_wreck.png | 36 | A burnt-out vehicle hulk with a small fire. Chosen over the intact-looking tanks (32-35), which could be mistaken for enemies. |
+| decor/volcano_pylon.png | 41 | A toppled rusty lattice pylon. |
+| decor/volcano_fissure.png | 49 | A jagged glowing lava crack. |
+| decor/volcano_obsidian.png | 61 | Black obsidian spikes with orange glints. |
+
+Unused but good alternatives in the grid: lava pools (52-55) and ash dunes (56-59). The dunes have low contrast on the ash.
+
+Lessons: (1) For a big opaque boss, use img2img with `no_background: false` on a sketch whose background is a flat grey, then flood-fill and polygon-mask the background away. With `no_background: true`, large flat deck areas were made transparent. (2) With a detailed, already shaded sketch, strength ~170 kept the layout and added texture. A plain sketch needs ~60. (3) Chained tileset base ids are returned immediately on creation, but chaining was only started after the previous sheet completed.

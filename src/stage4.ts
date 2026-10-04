@@ -1,7 +1,7 @@
 // Stage 4: a ruined city at night. Over the outskirts and downtown, across the river, past the
 // power plant and up the boulevard, where the walker comes stomping.
 import { Stage, Wave, dive, sweep, swoop, gun, cargo, tanks, scramble, heavy, swarm, chopper, hatch, loops, cross, both } from './stage';
-import { COLS, noise } from './terrain';
+import { COLS, TILE, noise, Terrain } from './terrain';
 import { WALKER } from './boss';
 import { ENEMIES } from './enemies';
 import { W, hash } from './draw';
@@ -36,6 +36,48 @@ function profile(seed: number, x: number, j: number) {
   if (j < DOWNTOWN) return block < 45 && n > -0.25 ? Level.Roof : Level.Street; // ruins, half gone
   if (j >= BOULEVARD) return (x < 4 || x > 11) && block < 85 ? Level.Roof : Level.Street;
   return block < 88 ? Level.Roof : Level.Street;
+}
+
+/**
+ * Night detail the tiles lack: dashed lane lines down the middle of the streets, street lamps,
+ * and lit windows on the flat roofs.
+ */
+function paint(g: CanvasRenderingContext2D, t: Terrain, r: number) {
+  const railRow = r >= RAIL_FROM && r < RAIL_TO;
+  for (let c = 0; c <= COLS; c += 5) {
+    if (railRow && Math.abs(c - RAIL_COL) <= 1) continue;
+    if (t.at(c, r) !== Level.Street || t.at(c, r + 1) !== Level.Street) continue;
+    const x = c * TILE;
+    g.fillStyle = '#b89838';
+    for (let y = 0; y < TILE; y++) if ((r * TILE + TILE - y) % 10 < 5) g.fillRect(x, y, 1, 1);
+    // A street lamp every third block of street, alternating sides.
+    if (r % 3 === 0) {
+      const lx = x + (r % 2 ? 6 : -7);
+      g.fillStyle = 'rgba(255,214,120,0.35)';
+      g.fillRect(lx - 2, 6, 5, 5);
+      g.fillStyle = '#ffe8a0';
+      g.fillRect(lx, 8, 1, 1);
+    }
+  }
+  // Cross streets: a dashed line along the grid row.
+  if (r % 6 === 0)
+    for (let i = 0; i < COLS; i++) {
+      if (t.at(i, r) !== Level.Street || t.at(i + 1, r) !== Level.Street) continue;
+      g.fillStyle = '#b89838';
+      for (let x = 0; x < TILE; x++) if ((i * TILE + x) % 10 < 5) g.fillRect(i * TILE + x, TILE - 1, 1, 1);
+    }
+  // Lit windows and skylights on flat roofs.
+  for (let i = 0; i < COLS; i++) {
+    if ([t.at(i, r), t.at(i + 1, r), t.at(i, r + 1), t.at(i + 1, r + 1)].some((v) => v !== Level.Roof)) continue;
+    const h = hash(r * 4099 + i * 131);
+    if (h % 3 === 0) continue;
+    for (let k = 0; k < 3; k++) {
+      const q = hash(h + k);
+      if (q % 2) continue;
+      g.fillStyle = q % 7 === 0 ? '#ffb040' : '#f0d070';
+      g.fillRect(i * TILE + 2 + (q >>> 3) % 11, 2 + (q >>> 9) % 12, 2 + ((q >>> 15) & 1), 1);
+    }
+  }
 }
 
 const { trainEngine, trainCar } = ENEMIES;
@@ -120,6 +162,7 @@ export const STAGE4: Stage = {
     decor: { level: Level.Roof, props: 'decor/city_', density: 16, markings: false },
     rails: [{ col: RAIL_COL, from: RAIL_FROM, to: RAIL_TO }],
     night: true,
+    paint,
   },
   boss: WALKER,
   key: 5,

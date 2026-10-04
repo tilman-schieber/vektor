@@ -13,6 +13,10 @@ export interface Bullet {
   big: boolean;
   t: number;
   dead: boolean;
+  /** A lava bomb: at this age it bursts into a ring. */
+  burst?: number;
+  /** A flame: gone at this age. */
+  life?: number;
 }
 
 /** Bullets aren't fired from off screen or point-blank under the player's nose. */
@@ -44,4 +48,21 @@ export function ring(w: World, x: number, y: number, n: number, speed: number, o
   if (!canFire(w, x, y)) return;
   for (let k = 0; k < n; k++) shoot(w, x, y, offset + (k / n) * Math.PI * 2, speed, big);
   sfx.enemyShot();
+}
+
+/** A lava bomb lobbed at angle `ang`: after `fuse` frames it bursts into a ring of n. */
+export function lob(w: World, x: number, y: number, ang: number, speed: number, fuse: number) {
+  if (!canFire(w, x, y)) return;
+  shoot(w, x, y, ang, speed, true);
+  w.bullets[w.bullets.length - 1].burst = fuse;
+  sfx.enemyShot();
+}
+
+/** A spurt of flame toward `ang`: fast, spread out, and burnt out after a short way. */
+export function flame(w: World, x: number, y: number, ang: number) {
+  if (!canFire(w, x, y)) return;
+  for (let k = 0; k < 3; k++) {
+    shoot(w, x, y, ang + (w.rng() - 0.5) * 0.5, 2.4 + w.rng() * 0.8);
+    w.bullets[w.bullets.length - 1].life = 34 + Math.floor(w.rng() * 10);
+  }
 }

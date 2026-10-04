@@ -26,6 +26,8 @@ export interface Enemy {
   r?: number;
   /** Shots bounce off (boss armour). */
   armored?: boolean;
+  /** Out of reach entirely (under the lava): shots and missiles pass it by. */
+  hidden?: boolean;
   /** Has been on screen, so leaving it means it's gone. */
   seen: boolean;
 }
@@ -370,6 +372,104 @@ const trainCar: EnemyDef = {
   },
 };
 
+/** Where a lava boat's gun sits, below its centre. */
+export const LAVABOAT_GUN = -2;
+
+/** Lava boat: sails a lava river like a destroyer, one gun amidships. */
+const lavaboat: EnemyDef = {
+  name: 'lavaboat',
+  sprite: 'enemies/lavaboat',
+  hp: 22,
+  score: 1200,
+  r: 12,
+  ground: true,
+  sinks: true,
+  update(e, w) {
+    e.vx = e.p[1] ?? 0;
+    e.vy = w.scroll - (e.p[0] ?? 0.2);
+    turn(e, aimAt(w, e.x, e.y), 0.05);
+    if (e.y > 12 && e.t % 60 === 30) fan(w, e.x + Math.sin(e.aim) * 9, e.y + LAVABOAT_GUN + Math.cos(e.aim) * 9, e.aim, 2 + loopShots(w), 0.18, 2.0);
+  },
+};
+
+/** Frames a magma turret's cycle lasts; within it, when it is up out of the lava. */
+export const MAGMA_CYCLE = 200;
+/** How far a magma turret has risen, 0 (under the lava) to 1 (up). */
+export function magmaRise(e: Enemy) {
+  const k = (e.t + (e.p[0] ?? 0)) % MAGMA_CYCLE;
+  if (k < 60) return 0;
+  if (k < 80) return (k - 60) / 20;
+  if (k < 160) return 1;
+  if (k < 180) return 1 - (k - 160) / 20;
+  return 0;
+}
+
+/** Magma turret: rises out of the lava, fires a spread and a ring, sinks again. Safe under the lava. */
+const magmaTurret: EnemyDef = {
+  name: 'magmaTurret',
+  sprite: 'enemies/magma_turret',
+  hp: 12,
+  score: 900,
+  r: 10,
+  ground: true,
+  sinks: true,
+  update(e, w) {
+    e.vx = 0;
+    e.vy = w.scroll;
+    e.armored = magmaRise(e) < 1;
+    e.hidden = magmaRise(e) === 0;
+    turn(e, aimAt(w, e.x, e.y), 0.08);
+    if (e.y < 16) return;
+    const k = (e.t + (e.p[0] ?? 0)) % MAGMA_CYCLE;
+    if (k === 95) fan(w, e.x, e.y, e.aim, 5, 0.2, 1.9);
+    if (k === 130) ring(w, e.x, e.y, 10 + loopShots(w) * 4, 1.3, e.t / 25);
+  },
+};
+
+/** Frames a silo's cycle lasts; within it, when its doors are open. */
+export const SILO_CYCLE = 240;
+export const siloOpen = (e: Enemy) => {
+  const k = (e.t + (e.p[0] ?? 0)) % SILO_CYCLE;
+  return k >= 120 && k < 200;
+};
+
+/** Missile silo: opens its doors and launches a homing rocket. Only hurt while open. */
+const silo: EnemyDef = {
+  name: 'silo',
+  sprite: 'enemies/silo_closed',
+  hp: 20,
+  score: 1500,
+  r: 13,
+  ground: true,
+  update(e, w) {
+    e.vx = 0;
+    e.vy = w.scroll;
+    e.armored = !siloOpen(e);
+    const k = (e.t + (e.p[0] ?? 0)) % SILO_CYCLE;
+    if (k === 150 && e.y > 10 && e.y < 220 && w.player.alive) {
+      const r = w.spawn(rocket, e.x, e.y, []);
+      r.aim = aimAt(w, e.x, e.y);
+      r.seen = true;
+    }
+  },
+};
+
+/** Homing rocket: launched by silos and bosses. Slow, turns toward the player, can be shot down. */
+const rocket: EnemyDef = {
+  name: 'rocket',
+  sprite: 'enemies/rocket',
+  hp: 1,
+  score: 200,
+  r: 5,
+  ground: false,
+  update(e, w) {
+    if (e.t < 210 && w.player.alive) turn(e, aimAt(w, e.x, e.y), e.t < 20 ? 0 : 0.028);
+    const speed = Math.min(1.9, 0.4 + e.t * 0.03) * w.bulletSpeed;
+    e.vx = Math.sin(e.aim) * speed;
+    e.vy = Math.cos(e.aim) * speed;
+  },
+};
+
 /** A piece of a boss: positioned by the boss, never moves by itself. */
 const part: EnemyDef = {
   name: 'part',
@@ -393,7 +493,7 @@ function turn(e: Enemy, want: number, rate: number) {
   e.aim += Math.max(-rate, Math.min(rate, d));
 }
 
-export const ENEMIES = { fighter, gunship, carrier, tank, bunker, interceptor, bomber, artillery, destroyer, drone, heli, popup, trainEngine, trainCar, part, groundPart };
+export const ENEMIES = { fighter, gunship, carrier, tank, bunker, interceptor, bomber, artillery, destroyer, drone, heli, popup, trainEngine, trainCar, lavaboat, magmaTurret, silo, rocket, part, groundPart };
 export type EnemyName = keyof typeof ENEMIES;
 
 export function makeEnemy(def: EnemyDef, x: number, y: number, p: number[] = []): Enemy {

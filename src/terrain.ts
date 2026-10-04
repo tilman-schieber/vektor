@@ -28,6 +28,10 @@ export interface Ground {
   colors: string[][];
   /** Level 0 is water, with waves. */
   water: boolean;
+  /** Level 0 is lava: it glows, pulses and bubbles. */
+  lava?: boolean;
+  /** Ash falls and embers rise over everything. */
+  ash?: boolean;
   /** Terrain level at corner (x, row) before smoothing; row 0 is the start, at the bottom. */
   profile(seed: number, x: number, j: number): number;
   /** Dressing for the open ground of one level: painted markings and props. */
@@ -36,6 +40,8 @@ export interface Ground {
   rails?: { col: number; from: number; to: number }[];
   /** Night: searchlights sweep the ground. */
   night?: boolean;
+  /** Paints extra detail into tile row r's picture (y 0 is the row's top), after the tiles. */
+  paint?(g: CanvasRenderingContext2D, t: Terrain, r: number): void;
 }
 
 export interface Decor {
@@ -105,6 +111,26 @@ export class Terrain {
     return this.at(Math.round(x / TILE), Math.round(wy / TILE));
   }
 
+  /** Open lava pulses with heat, and bubbles pop on it now and then. */
+  private lavaGlow(ctx: CanvasRenderingContext2D, r: number, y: number, frame: number) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < COLS; i++) {
+      if (this.at(i, r) || this.at(i + 1, r) || this.at(i, r + 1) || this.at(i + 1, r + 1)) continue;
+      const h = hash(r * 977 + i * 131);
+      ctx.fillStyle = `rgba(255,120,30,${(0.07 + 0.07 * Math.sin(frame / 24 + i * 0.7 + r * 0.5)).toFixed(3)})`;
+      ctx.fillRect(i * TILE, y, TILE, TILE);
+      // A bubble swells and pops.
+      const phase = (frame + (h >>> 8)) % (70 + (h & 63));
+      if (phase < 14) {
+        const bx = i * TILE + 3 + ((h >>> 16) % 10), by = y + 3 + ((h >>> 20) % 10);
+        ctx.fillStyle = phase < 10 ? '#ffd860' : '#ff8030';
+        ctx.fillRect(bx, by, phase < 10 ? 2 : 3, phase < 10 ? 2 : 1);
+      }
+    }
+    ctx.restore();
+  }
+
   /** Wave crests that come and go on open water, so the sea doesn't look stamped out. */
   private glints(ctx: CanvasRenderingContext2D, r: number, y: number, frame: number) {
     for (let i = 0; i < COLS; i++) {
@@ -133,6 +159,7 @@ export class Terrain {
       const nw = this.at(i, r + 1), ne = this.at(i + 1, r + 1), sw = this.at(i, r), se = this.at(i + 1, r);
       drawWangTile(g, this.ground, [nw, ne, sw, se], i * TILE, 0, hash(r * 64 + i));
     }
+    this.ground.paint?.(g, this, r);
     for (const rl of this.ground.rails ?? []) if (r >= rl.from && r < rl.to) drawRails(g, rl.col * TILE);
     if (this.ground.decor) this.decorate(g, r, this.ground.decor);
     this.rows.set(r, c);
@@ -187,6 +214,7 @@ export class Terrain {
       const y = H - ((r + 1) * TILE - d);
       ctx.drawImage(this.row(Math.min(r, ROWS - 1)), 0, y);
       if (this.ground.water) this.glints(ctx, Math.min(r, ROWS - 1), y, frame);
+      if (this.ground.lava) this.lavaGlow(ctx, Math.min(r, ROWS - 1), y, frame);
     }
     for (const r of this.rows.keys()) if (r < first - 2 || r > first + 40) this.rows.delete(r);
   }

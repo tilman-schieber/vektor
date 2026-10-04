@@ -1,6 +1,6 @@
 import { Game, MENU, MUSIC_NAMES, NAME_LEN, CARD_FRAMES, TALLY_AT } from './game';
 import { World, Shot, Blast, Item, MAX_LEVEL } from './world';
-import { Enemy, DESTROYER_GUNS, popupOpen } from './enemies';
+import { Enemy, DESTROYER_GUNS, LAVABOAT_GUN, popupOpen, magmaRise, siloOpen } from './enemies';
 import { aimAt } from './bullets';
 import { Boss } from './boss';
 import { STAGES } from './stages';
@@ -9,7 +9,7 @@ import { MAX_SCORES } from './scores';
 import { HELP_PAGES, wrapText } from './help';
 import { drawText, drawTextCentered, drawTextScaled, drawTextShadow, textWidth } from './font';
 import { Ctx, W, H, WHITE, RED, GREY, LIGHT, DARK, YELLOW, GOLD, BLUE, drawBox, disc, pad, hash } from './draw';
-import { spr, has, frames, flash, shadow, rotated, stepFor, drawAt } from './sprites';
+import { spr, has, frames, flash, shadow, rotated, stepFor, drawAt, without } from './sprites';
 
 export { W, H };
 
@@ -27,7 +27,7 @@ function drawShadow(ctx: Ctx, name: string, x: number, y: number, dist = 1) {
 function enemySprite(e: Enemy) {
   const name = e.def.sprite;
   if (e.flash > 0) return flash(name);
-  if (e.def.name === 'fighter' || e.def.name === 'interceptor') return rotated(name, stepFor(e.vx, e.vy || 0.01));
+  if (e.def.name === 'fighter' || e.def.name === 'interceptor' || e.def.name === 'rocket') return rotated(name, stepFor(e.vx, e.vy || 0.01));
   return spr(name);
 }
 
@@ -59,6 +59,30 @@ function drawGroundEnemy(ctx: Ctx, e: Enemy, w: World, frame: number) {
     const step = stepFor(e.vx, e.vy - w.scroll || 0.01);
     drawAt(ctx, e.flash > 0 ? flash('enemies/tank') : rotated('enemies/tank', step), e.x, e.y);
     drawAt(ctx, rotated('enemies/tank_turret', stepFor(Math.sin(e.aim), Math.cos(e.aim))), e.x, e.y);
+    return;
+  }
+  if (e.def.name === 'magmaTurret') {
+    const rise = magmaRise(e);
+    if (rise <= 0) {
+      // Under the lava: only bubbles give it away.
+      if ((frame >> 3) % 3 === 0) disc(ctx, e.x + ((frame >> 3) % 5) - 2, e.y + 2, 1.5, '#ffd860');
+      return;
+    }
+    // Rises out of the lava: shown from the top down as it comes up.
+    const s = e.flash > 0 ? flash('enemies/magma_turret') : spr('enemies/magma_turret');
+    const h = Math.max(1, Math.round(s.height * rise));
+    ctx.drawImage(s, 0, 0, s.width, h, Math.round(e.x - s.width / 2), Math.round(e.y - s.height / 2), s.width, h);
+    if (rise >= 1) drawBarrel(ctx, e.x, e.y, e.aim, 10);
+    return;
+  }
+  if (e.def.name === 'silo') {
+    const name = siloOpen(e) ? 'enemies/silo_open' : 'enemies/silo_closed';
+    drawAt(ctx, e.flash > 0 ? flash(name) : spr(name), e.x, e.y);
+    return;
+  }
+  if (e.def.name === 'lavaboat') {
+    drawAt(ctx, enemySprite(e), e.x, e.y);
+    drawBarrel(ctx, e.x, e.y + LAVABOAT_GUN, e.aim, 10);
     return;
   }
   if (e.def.name === 'popup') {
@@ -136,6 +160,20 @@ function drawItem(ctx: Ctx, it: Item, frame: number) {
 
 function drawBullets(ctx: Ctx, w: World, frame: number) {
   for (const b of w.bullets) {
+    if (b.life !== undefined) {
+      // Flame: hot to cool as it burns out.
+      const k = b.t / b.life;
+      disc(ctx, b.x, b.y, k < 0.5 ? 2.5 : 2, k < 0.3 ? '#fff0a0' : k < 0.6 ? '#f8b800' : '#f85800');
+      continue;
+    }
+    if (b.burst !== undefined) {
+      // Lava bomb: a dark crust round a glowing middle that swells before it bursts.
+      const r = 3 + (b.t > b.burst - 15 && frame % 4 < 2 ? 1 : 0);
+      disc(ctx, b.x, b.y, r + 1, '#000');
+      disc(ctx, b.x, b.y, r, '#3a1810');
+      disc(ctx, b.x, b.y, r - 1.5, frame % 6 < 3 ? '#f87800' : '#f8d838');
+      continue;
+    }
     const blink = ((frame + b.t) >> 2) % 2;
     disc(ctx, b.x, b.y, b.r + 1, '#000');
     disc(ctx, b.x, b.y, b.r, b.big ? (blink ? '#f878f8' : '#d800cc') : blink ? '#f83800' : '#f8a000');
@@ -160,7 +198,17 @@ function drawPlayer(ctx: Ctx, w: World, frame: number) {
 function drawBoss(ctx: Ctx, b: Boss, frame: number) {
   if (b.gone) return;
   const name = b.open ? b.def.openSprite : b.def.sprite;
-  drawAt(ctx, spr(name), b.x, b.y);
+  const limbs = b.def.limbs;
+  if (limbs) {
+    // Limbs go under the body, each moved with its pod; the cut overlaps the body by a few rows.
+    const s = spr(name);
+    const ox = Math.round(b.x - s.width / 2), oy = Math.round(b.y - s.height / 2);
+    for (const l of limbs) {
+      const [dx, dy] = b.def.podOffset?.(b, l.pod) ?? [0, 0];
+      ctx.drawImage(s, l.x, l.y - 4, l.w, l.h + 4, ox + l.x + dx, oy + l.y - 4 + dy, l.w, l.h + 4);
+    }
+    ctx.drawImage(without(name, limbs), ox, oy);
+  } else drawAt(ctx, spr(name), b.x, b.y);
   // A big hull only glints when hit; a full white flash would strobe under the laser.
   if (b.parts.some((p) => p.flash > 0 && !p.armored) && frame % 4 < 2) {
     ctx.globalAlpha = 0.35;
@@ -181,6 +229,25 @@ function drawBoss(ctx: Ctx, b: Boss, frame: number) {
     const r = 4 + ((frame >> speed) % 2);
     disc(ctx, b.coreX, b.coreY, r + 2, '#f83800');
     disc(ctx, b.coreX, b.coreY, r - 1, b.core.flash ? WHITE : '#f8d838');
+  }
+}
+
+/** Ash drifting down and embers rising, in screen space. */
+function drawAsh(ctx: Ctx, frame: number) {
+  for (let i = 0; i < 46; i++) {
+    const h = hash(i * 97 + 3);
+    const vy = 0.25 + ((h >>> 4) % 10) / 25;
+    const x = (((h % W) - frame * 0.15 + Math.sin(frame / 50 + i) * 6) % W + W) % W;
+    const y = (((h >>> 8) % H) + frame * vy) % H;
+    ctx.fillStyle = i % 3 ? '#8a8480' : '#b0aaa4';
+    ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
+  }
+  for (let i = 0; i < 14; i++) {
+    const h = hash(i * 131 + 7);
+    const x = (h % W) + Math.sin(frame / 20 + i) * 4;
+    const y = H - ((((h >>> 8) % H) + frame * (0.5 + (h & 7) / 14)) % H);
+    ctx.fillStyle = (frame + i) % 8 < 4 ? '#f8a838' : '#f85800';
+    ctx.fillRect(Math.round(x), Math.round(y), 1, 1);
   }
 }
 
@@ -246,6 +313,12 @@ function drawWorld(ctx: Ctx, w: World, frame: number) {
     if (e.def.ground || !e.def.sprite) continue;
     drawAt(ctx, enemySprite(e), e.x, e.y);
     if (e.def.name === 'heli') drawRotor(ctx, e.x, e.y, w.frame);
+    if (e.def.name === 'rocket') {
+      // Exhaust behind it.
+      const len = Math.hypot(e.vx, e.vy) || 1;
+      ctx.fillStyle = w.frame % 2 ? '#f8d838' : '#f85800';
+      ctx.fillRect(Math.round(e.x - (e.vx / len) * 8) - 1, Math.round(e.y - (e.vy / len) * 8) - 1, 2, 2);
+    }
   }
   for (const it of w.items) if (it.kind !== 'medal') drawItem(ctx, it, frame);
   for (const b of w.blasts) if (!b.ground) drawBlast(ctx, b);
@@ -255,6 +328,7 @@ function drawWorld(ctx: Ctx, w: World, frame: number) {
   }
   drawPlayer(ctx, w, frame);
   drawBullets(ctx, w, frame);
+  if (w.terrain.ground.ash) drawAsh(ctx, frame);
   for (const pu of w.popups) drawTextShadow(ctx, pu.text, Math.round(pu.x - textWidth(pu.text) / 2), Math.round(pu.y), pu.t % 4 < 2 ? WHITE : GOLD);
 
   // The bomb: a white flash, then a shock ring rolling out.

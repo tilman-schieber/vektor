@@ -79,6 +79,13 @@ const PLACEHOLDER: Record<string, [number, number, string, 'jet' | 'box' | 'disc
   'enemies/train_car': [24, 40, '#4a5058', 'box'],
   'boss/boss4': [128, 128, '#404850', 'box'],
   'boss/boss4_open': [128, 128, '#704040', 'box'],
+  'enemies/lavaboat': [24, 40, '#3a2a28', 'box'],
+  'enemies/magma_turret': [24, 24, '#5a2a18', 'disc'],
+  'enemies/silo_closed': [32, 32, '#4a4040', 'disc'],
+  'enemies/silo_open': [32, 32, '#a04020', 'disc'],
+  'enemies/rocket': [16, 16, '#c0c0c0', 'jet'],
+  'boss/boss5': [144, 128, '#4a2020', 'box'],
+  'boss/boss5_open': [144, 128, '#a04020', 'box'],
   'boss/boss': [128, 96, '#5a6070', 'jet'],
   'boss/boss_open': [128, 96, '#7a5050', 'jet'],
   'items/medal': [16, 16, '#f8b800', 'disc'],
@@ -147,6 +154,17 @@ function cached(key: string, make: () => Sprite) {
   if (!s) derived.set(key, (s = make()));
   return s;
 }
+
+/** The sprite with these rectangles cut out (for bosses whose limbs are drawn separately). */
+export const without = (name: string, rects: { x: number; y: number; w: number; h: number }[]) =>
+  cached(`without:${name}:${rects.map((r) => `${r.x},${r.y},${r.w},${r.h}`).join(';')}`, () => {
+    const src = spr(name);
+    const c = canvas(src.width, src.height);
+    const g = c.getContext('2d')!;
+    g.drawImage(src, 0, 0);
+    for (const r of rects) g.clearRect(r.x, r.y, r.w, r.h);
+    return c;
+  });
 
 /** All-white silhouette, for hit flashes. */
 export const flash = (name: string) => cached(`flash:${name}`, () => recolor(spr(name), '#fcfcfc'));

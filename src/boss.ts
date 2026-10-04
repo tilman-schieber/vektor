@@ -2,7 +2,7 @@
 // core, phase 3 the core in a rage below half health. A BossDef gives the layout and the patterns.
 import type { World } from './world';
 import { ENEMIES, Enemy } from './enemies';
-import { aimed, aimAt, fan, ring, shoot, canFire } from './bullets';
+import { aimed, aimAt, fan, ring, shoot, canFire, lob, flame } from './bullets';
 import { sfx } from './audio';
 import { W } from './draw';
 import { spr } from './sprites';
@@ -19,6 +19,8 @@ export interface BossDef {
   turrets: boolean | number[];
   /** Extra per-frame offset of pod i, for parts that move (a walker's legs). */
   podOffset?(b: Boss, i: number): [number, number];
+  /** Parts of the sprite (from y down, in sprite pixels) that move with a pod's offset. */
+  limbs?: Limb[];
   podHp: number;
   coreHp: number;
   coreY: number;
@@ -29,6 +31,14 @@ export interface BossDef {
   hoverY: number;
   /** Movement and fire for one frame of phases 1-3. */
   act(b: Boss, w: World): void;
+}
+
+export interface Limb {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  pod: number;
 }
 
 export class Boss {
@@ -328,7 +338,11 @@ export const WALKER: BossDef = {
     [21, 12],
   ],
   turrets: [0, 1],
-  podOffset: (b, i) => (i < 2 ? [0, 0] : [0, Math.sin(stride(b, i - 2)) * 6]),
+  podOffset: (b, i) => (i < 2 ? [0, 0] : [0, Math.round(Math.sin(stride(b, i - 2)) * 4)]),
+  limbs: [
+    { x: 30, y: 78, w: 26, h: 42, pod: 2 },
+    { x: 72, y: 78, w: 28, h: 42, pod: 3 },
+  ],
   podHp: 110,
   coreHp: 720,
   coreY: -16,
@@ -363,6 +377,60 @@ export const WALKER: BossDef = {
         shoot(w, c.x, c.y + 8, -a, 2.1);
       }
       if (b.t % 80 === 40) aimed(w, c.x, c.y + 8, 3, 0.2, 2.6, true);
+    }
+  },
+};
+
+// ---------- stage 5: the crater fortress ----------
+
+export const CRATER: BossDef = {
+  sprite: 'boss/boss5',
+  openSprite: 'boss/boss5_open',
+  ground: true,
+  // Flame cannons on the flanks, then the missile racks.
+  pods: [
+    [-45, -12],
+    [45, -12],
+    [-32, 33],
+    [32, 33],
+  ],
+  turrets: [0, 1],
+  podHp: 100,
+  coreHp: 520,
+  coreY: -6,
+  bodyY: -42,
+  bodyR: 20,
+  hoverY: 96,
+  act(b, w) {
+    const c = b.core;
+    b.x = W / 2 + Math.sin(b.t / 240) * 12;
+    if (b.phase === 1) {
+      // The flame cannons spray in bursts; they reach only so far, so keep your distance.
+      [0, 1].forEach((i) => {
+        const pod = b.pods[i];
+        const k = (b.t + i * 75) % 150;
+        if (!pod.dead && k < 45 && k % 4 === 0) flame(w, pod.x + Math.sin(pod.aim) * 12, pod.y + Math.cos(pod.aim) * 12, pod.aim);
+        if (!pod.dead && k === 60) aimed(w, pod.x, pod.y, 3, 0.22, 2.0);
+      });
+      // The racks launch homing rockets in turn.
+      [2, 3].forEach((i) => {
+        const pod = b.pods[i];
+        if (pod.dead || (b.t + (i - 2) * 90) % 180 !== 0 || !w.player.alive) return;
+        const r = w.spawn(ENEMIES.rocket, pod.x, pod.y + 10, []);
+        r.aim = aimAt(w, pod.x, pod.y);
+        r.seen = true;
+      });
+    } else if (b.phase === 2) {
+      // Lava bombs that burst into rings, between aimed shots.
+      if (b.t % 70 === 0) lob(w, c.x, c.y + 10, aimAt(w, c.x, c.y) + (w.rng() - 0.5) * 0.6, 1.7, 46);
+      if (b.t % 70 === 35) aimed(w, c.x, c.y + 10, 3, 0.16, 2.4);
+    } else {
+      if (b.t % 6 === 0 && canFire(w, c.x, c.y)) {
+        b.spin += 0.31;
+        shoot(w, c.x, c.y, b.spin, 1.6);
+        shoot(w, c.x, c.y, b.spin + Math.PI, 1.6);
+      }
+      if (b.t % 55 === 0) lob(w, c.x, c.y + 10, aimAt(w, c.x, c.y), 1.9, 38);
     }
   },
 };
