@@ -3,7 +3,6 @@ import { loadTables, saveTables, rankFor, ScoreEntry, Tables, MAX_SCORES, load, 
 import { sfx, music, TUNE } from './audio';
 import { makeRng, randomSeed } from './rng';
 import { World, Controls } from './world';
-import { STAGE_LEN } from './stage1';
 import { HELP_PAGES } from './help';
 
 export type Action = 'up' | 'down' | 'left' | 'right' | 'fire' | 'bomb' | 'start' | 'back' | 'quit' | 'mute' | 'scores';
@@ -23,7 +22,6 @@ export interface Input {
 export type Phase = 'title' | 'play' | 'clear' | 'over' | 'entry' | 'scores' | 'help';
 
 export interface Settings {
-  mode: number;
   /** Index into MUSIC_NAMES. */
   music: number;
   /** M mutes without changing the selection. */
@@ -33,14 +31,14 @@ export interface Settings {
 export const MUSIC_NAMES = ['ON', 'OFF'];
 const MUSIC_OFF = 1;
 
-export const MENU = ['MODE', 'MUSIC', 'HELP'] as const;
+export const MENU = ['MUSIC', 'HELP'] as const;
 export const NAME_LEN = 6;
 const NAME_CHARS = ' ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-const DEFAULT_SETTINGS: Settings = { mode: 0, music: 0, muted: false };
+const DEFAULT_SETTINGS: Settings = { music: 0, muted: false };
 
-/** Frames the stage card shows at the start of a loop. */
+/** Frames the stage card shows at the start of a stage. */
 export const CARD_FRAMES = 180;
-/** Stage clear: when each bonus line appears, and when the next loop starts. */
+/** Stage clear: when each bonus line appears, and when the next stage starts. */
 export const TALLY_AT = [90, 150, 210];
 const CLEAR_FRAMES = 420;
 export const NO_MISS_BONUS = 30000;
@@ -49,7 +47,6 @@ export const BOMB_BONUS = 3000;
 function loadSettings(): Settings {
   try {
     const s = { ...DEFAULT_SETTINGS, ...JSON.parse(load('vektor.settings') ?? '{}') };
-    s.mode = Math.min(MODES.length - 1, Math.max(0, s.mode | 0));
     s.music = Math.min(MUSIC_NAMES.length - 1, Math.max(0, s.music | 0));
     s.muted = !!s.muted;
     return s;
@@ -77,7 +74,6 @@ export class Game {
   scoresGlobal = true;
   /** Row of the last game in the world table, or -1. */
   globalRank = -1;
-  scoresView = 0;
   entryRank = -1;
   entryName: string[] = [];
   entryCursor = 0;
@@ -110,15 +106,15 @@ export class Game {
     this.global ??= Object.fromEntries(MODES.map((m) => [m.id, []])) as unknown as Tables;
     this.global[mode] = res.top;
     this.globalState = 'ok';
-    if (this.settings.mode === MODES.findIndex((m) => m.id === mode)) this.globalRank = res.rank;
+    this.globalRank = res.rank;
   }
 
   get mode(): Mode {
-    return MODES[this.settings.mode];
+    return MODES[0];
   }
 
-  best(modeIdx = this.settings.mode): ScoreEntry | undefined {
-    return this.tables[MODES[modeIdx].id]?.[0];
+  best(): ScoreEntry | undefined {
+    return this.tables[this.mode.id]?.[0];
   }
 
   step(input: Input) {
@@ -181,14 +177,12 @@ export class Game {
     }
     if (d) {
       const wrap = (v: number, n: number) => (v + d + n) % n;
-      if (row === 'MODE') s.mode = wrap(s.mode, MODES.length);
       if (row === 'MUSIC') s.music = wrap(s.music, MUSIC_NAMES.length);
       sfx.select();
       this.saveSettings();
     }
     if (pressed.has('scores')) {
       this.refreshGlobal();
-      this.scoresView = s.mode;
       this.entryRank = -1;
       this.globalRank = -1;
       this.phase = 'scores';
@@ -212,7 +206,7 @@ export class Game {
 
   startGame() {
     const mode = this.mode;
-    this.world = new World(makeRng(randomSeed()), mode.lives, mode.hard);
+    this.world = new World(makeRng(randomSeed()), mode.lives);
     this.entryRank = -1;
     this.paused = false;
     this.phase = 'play';
@@ -243,8 +237,9 @@ export class Game {
     if (w.state === 'clear') return music.stop();
     music.setIntensity(Math.min(5, 1 + Math.floor(w.progress * 5)));
     music.setTempo(1 + (w.loop - 1) * 0.05);
+    music.setKey(w.stage.key);
     if (!music.running || music.tune !== want) {
-      if (want === TUNE.STAGE) music.setMelody(w.loop * 7);
+      if (want === TUNE.STAGE) music.setMelody(w.loop * 7 + w.stageIdx * 101);
       music.play(want, music.tune !== want);
     }
   }
@@ -287,7 +282,7 @@ export class Game {
       if (this.tally[i][1]) sfx.tally();
     });
     if (this.timer >= CLEAR_FRAMES) {
-      w.nextLoop();
+      w.nextStage();
       this.phase = 'play';
       this.timer = 0;
       sfx.start();
@@ -317,7 +312,6 @@ export class Game {
     const w = this.world!;
     this.entryRank = -1;
     this.globalRank = -1;
-    this.scoresView = this.settings.mode;
     this.scoresGlobal = !!this.global;
     if (w.score <= 0) return;
     const entry: ScoreEntry = { name: '', score: w.score, loop: w.loop, medals: w.medals };
@@ -383,19 +377,11 @@ export class Game {
 
   private showScores() {
     this.refreshGlobal();
-    this.scoresView = this.settings.mode;
     this.phase = 'scores';
     this.timer = 0;
   }
 
   private stepScores(pressed: Set<Action>) {
-    const d = (pressed.has('right') ? 1 : 0) - (pressed.has('left') ? 1 : 0);
-    if (d) {
-      this.scoresView = (this.scoresView + d + MODES.length) % MODES.length;
-      this.entryRank = -1;
-      this.globalRank = -1;
-      sfx.select();
-    }
     if ((pressed.has('up') || pressed.has('down')) && this.global) {
       this.scoresGlobal = !this.scoresGlobal;
       sfx.move();
@@ -411,6 +397,12 @@ export class Game {
   }
 
   bossNow() {
-    this.skipTo(STAGE_LEN - 20);
+    if (this.world) this.skipTo(this.world.stage.length - 20);
+  }
+
+  /** Starts stage n, 1-based (dev only). */
+  gotoStage(n: number) {
+    this.world?.goTo(n - 1);
+    this.timer = 0;
   }
 }

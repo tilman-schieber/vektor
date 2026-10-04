@@ -1,48 +1,40 @@
-// Stage 1: over the ocean, across the beach, up a jungle river, into the base. The boss waits at the end.
-// Waves fire when the scroll distance passes `at`; the screen is 320 pixels tall and scrolls 30 a second.
-import type { World } from './world';
-import { ENEMIES, ItemKind } from './enemies';
+// Stage 1: over the ocean, across the beach, up a jungle river, into the base. The flying
+// fortress waits at the end.
+import { Stage, Wave, dive, sweep, swoop, gun, cargo, tanks, pillbox, both } from './stage';
+import { COLS, noise } from './terrain';
+import { FORTRESS } from './boss';
 import { W } from './draw';
 
-export interface Wave {
-  at: number;
-  run(w: World): void;
+const enum Level {
+  Ocean = 0,
+  Sand = 1,
+  Jungle = 2,
+  Base = 3,
 }
 
-export const STAGE_LEN = 4600;
+function profile(seed: number, x: number, j: number) {
+  const n = noise(seed, x / 3.5, j / 3.5) * 0.7 + noise(seed + 1, x / 1.5, j / 1.5) * 0.3;
+  if (j < 52) {
+    // Islands: broad low-frequency blobs, sand rings round a jungle middle.
+    const isle = noise(seed + 2, x / 5, j / 5) + n * 0.25;
+    if (j < 16 || isle < 0.45) return Level.Ocean;
+    return isle > 0.75 ? Level.Jungle : Level.Sand;
+  }
+  // The coast comes in on a slant.
+  const coast = 60 + Math.sin(x / 3) * 3 + (x - COLS / 2) * 0.7;
+  if (j < coast) return Level.Ocean;
+  if (j < 100) return j > 88 + n * 6 ? Level.Jungle : Level.Sand;
+  if (j < 205) {
+    // A river winds through the jungle.
+    const river = COLS / 2 + Math.sin(j / 9) * 4.5;
+    if (j > 122 && j < 172 && Math.abs(x - river) < 1.3) return Level.Ocean;
+    return n < -0.45 ? Level.Sand : Level.Jungle;
+  }
+  if (j < 212 + n * 4) return Level.Jungle;
+  return n > 0.6 ? Level.Jungle : Level.Base;
+}
 
-const { fighter, gunship, carrier, tank, bunker } = ENEMIES;
-
-/** n fighters diving one after another down column x. */
-const dive = (x: number, n = 5, gap = 12) => (w: World) => {
-  for (let k = 0; k < n; k++) w.after(k * gap, () => w.spawn(fighter, x, -12, [0, 0, k * 4]));
-};
-
-/** A line of fighters sweeping in from one side at height y. */
-const sweep = (fromLeft: boolean, y: number, n = 6) => (w: World) => {
-  for (let k = 0; k < n; k++) w.after(k * 10, () => w.spawn(fighter, fromLeft ? -12 : W + 12, y, [1, y, k * 3]));
-};
-
-/** A V of fighters that dive to row `turn` and climb away again. */
-const swoop = (cx: number, turn: number) => (w: World) => {
-  const offs = [0, -18, 18, -36, 36];
-  offs.forEach((dx, k) => w.after(k * 6, () => w.spawn(fighter, cx + dx, -12, [2, turn, k * 5])));
-};
-
-const gun = (x: number, row = 70, drop?: ItemKind) => (w: World) => void w.spawn(gunship, x, -30, [row], drop);
-const cargo = (x: number, drop: ItemKind = 'weapon') => (w: World) => void w.spawn(carrier, x, -20, [], drop);
-
-/** Tanks rolling in a column from the top, or across from a side when vx is set. */
-const tanks = (x: number, n: number, vx = 0, vy = 0.3, y = -14) => (w: World) => {
-  for (let k = 0; k < n; k++) w.after(k * 30, () => w.spawn(tank, x, y, [vx, vy]));
-};
-
-/** A bunker with a medal in it. */
-const pillbox = (x: number, medal = true) => (w: World) => void w.spawn(bunker, x, -16, [], medal ? 'medal' : undefined);
-
-const both = (...fns: ((w: World) => void)[]) => (w: World) => fns.forEach((f) => f(w));
-
-export const STAGE1: Wave[] = [
+const WAVES: Wave[] = [
   // Open sea.
   { at: 60, run: dive(60) },
   { at: 160, run: dive(180) },
@@ -96,3 +88,22 @@ export const STAGE1: Wave[] = [
   { at: 4300, run: both(swoop(80, 150), swoop(160, 150)) },
   { at: 4400, run: cargo(120, 'bomb') },
 ];
+
+export const STAGE1: Stage = {
+  name: 'COAST',
+  length: 4600,
+  waves: WAVES,
+  ground: {
+    sets: ['ocean_beach', 'beach_jungle', 'jungle_base'],
+    colors: [
+      ['#1050a0', '#1860b8', '#0c4890'],
+      ['#d8b878', '#e4c890', '#c8a868'],
+      ['#2c7a28', '#3a8c30', '#226a20'],
+      ['#787c80', '#888c90', '#6c7074'],
+    ],
+    water: true,
+    profile,
+  },
+  boss: FORTRESS,
+  key: 0,
+};

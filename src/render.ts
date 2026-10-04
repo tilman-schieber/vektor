@@ -1,9 +1,9 @@
 import { Game, MENU, MUSIC_NAMES, NAME_LEN, CARD_FRAMES, TALLY_AT } from './game';
 import { World, Shot, Blast, Item, MAX_LEVEL } from './world';
 import { Enemy } from './enemies';
-import { Boss, POD_X, POD_Y, CORE_Y } from './boss';
+import { Boss } from './boss';
+import { STAGES } from './stages';
 import { Terrain } from './terrain';
-import { MODES } from './modes';
 import { MAX_SCORES } from './scores';
 import { HELP_PAGES, wrapText } from './help';
 import { drawText, drawTextCentered, drawTextScaled, drawTextShadow, textWidth } from './font';
@@ -26,7 +26,7 @@ function drawShadow(ctx: Ctx, name: string, x: number, y: number, dist = 1) {
 function enemySprite(e: Enemy) {
   const name = e.def.sprite;
   if (e.flash > 0) return flash(name);
-  if (e.def.name === 'fighter') return rotated(name, stepFor(e.vx, e.vy || 0.01));
+  if (e.def.name === 'fighter' || e.def.name === 'interceptor') return rotated(name, stepFor(e.vx, e.vy || 0.01));
   return spr(name);
 }
 
@@ -39,6 +39,7 @@ function drawGroundEnemy(ctx: Ctx, e: Enemy, w: World) {
     return;
   }
   drawAt(ctx, enemySprite(e), e.x, e.y);
+  if (e.def.name === 'artillery') drawAt(ctx, rotated('enemies/artillery_barrel', stepFor(Math.sin(e.aim), Math.cos(e.aim))), e.x, e.y);
 }
 
 function drawShot(ctx: Ctx, s: Shot, frame: number) {
@@ -129,7 +130,7 @@ function drawPlayer(ctx: Ctx, w: World, frame: number) {
 
 function drawBoss(ctx: Ctx, b: Boss, frame: number) {
   if (b.gone) return;
-  const name = b.open ? 'boss/boss_open' : 'boss/boss';
+  const name = b.open ? b.def.openSprite : b.def.sprite;
   drawAt(ctx, spr(name), b.x, b.y);
   // A big hull only glints when hit; a full white flash would strobe under the laser.
   if (b.parts.some((p) => p.flash > 0 && !p.armored) && frame % 4 < 2) {
@@ -137,19 +138,27 @@ function drawBoss(ctx: Ctx, b: Boss, frame: number) {
     drawAt(ctx, flash(name), b.x, b.y);
     ctx.globalAlpha = 1;
   }
-  // Wrecked pods smoke and burn.
-  for (const pod of b.pods) {
-    if (!pod.dead) continue;
-    const x = b.x + pod.p[0] * POD_X, y = b.y + POD_Y;
-    disc(ctx, x, y, 8, '#202020');
-    disc(ctx, x + ((frame >> 2) % 3) - 1, y - 2, 3 + (frame % 3), frame % 4 < 2 ? '#f87800' : '#f8d838');
-  }
+  b.pods.forEach((pod, i) => {
+    const [x, y] = b.podPos(i);
+    if (pod.dead) {
+      // Wrecked pods smoke and burn.
+      disc(ctx, x, y, 8, '#202020');
+      disc(ctx, x + ((frame >> 2) % 3) - 1, y - 2, 3 + (frame % 3), frame % 4 < 2 ? '#f87800' : '#f8d838');
+    } else if (b.def.turrets) {
+      // A gun barrel that follows the player.
+      const dx = Math.sin(pod.aim), dy = Math.cos(pod.aim);
+      for (let k = 3; k < 12; k++) {
+        ctx.fillStyle = k > 9 ? '#101010' : '#2a2a2a';
+        ctx.fillRect(Math.round(x + dx * k) - 1, Math.round(y + dy * k) - 1, 3, 3);
+      }
+    }
+  });
   // The core glows once open, and pulses fast in a rage.
   if (b.open && b.dying < 0) {
     const speed = b.phase === 3 ? 3 : 5;
     const r = 4 + ((frame >> speed) % 2);
-    disc(ctx, b.x, b.y + CORE_Y, r + 2, '#f83800');
-    disc(ctx, b.x, b.y + CORE_Y, r - 1, b.core.flash ? WHITE : '#f8d838');
+    disc(ctx, b.coreX, b.coreY, r + 2, '#f83800');
+    disc(ctx, b.coreX, b.coreY, r - 1, b.core.flash ? WHITE : '#f8d838');
   }
 }
 
@@ -159,15 +168,17 @@ function drawWorld(ctx: Ctx, w: World, frame: number) {
   for (const wr of w.wrecks) drawAt(ctx, spr('enemies/wreck'), wr.x, wr.y);
   for (const e of w.enemies) if (e.def.ground) drawGroundEnemy(ctx, e, w);
   for (const it of w.items) if (it.kind === 'medal') drawItem(ctx, it, frame);
+  if (w.boss?.def.ground) drawBoss(ctx, w.boss, frame);
   for (const b of w.blasts) if (b.ground) drawBlast(ctx, b);
 
   // Shadows of everything in the air.
   for (const e of w.enemies) if (!e.def.ground && e.def.sprite) drawShadow(ctx, e.def.sprite, e.x, e.y);
-  if (w.boss && !w.boss.gone) drawShadow(ctx, w.boss.open ? 'boss/boss_open' : 'boss/boss', w.boss.x, w.boss.y, 2);
+  const b = w.boss;
+  if (b && !b.gone && !b.def.ground) drawShadow(ctx, b.open ? b.def.openSprite : b.def.sprite, b.x, b.y, 2);
   if (w.player.alive) drawShadow(ctx, 'ships/player', w.player.x, w.player.y);
 
   for (const s of w.shots) drawShot(ctx, s, frame);
-  if (w.boss) drawBoss(ctx, w.boss, frame);
+  if (b && !b.def.ground) drawBoss(ctx, b, frame);
   for (const e of w.enemies) if (!e.def.ground && e.def.sprite) drawAt(ctx, enemySprite(e), e.x, e.y);
   for (const it of w.items) if (it.kind !== 'medal') drawItem(ctx, it, frame);
   for (const b of w.blasts) if (!b.ground) drawBlast(ctx, b);
@@ -257,8 +268,10 @@ function stageCard(ctx: Ctx, game: Game, w: World, frame: number) {
   if (game.phase !== 'play' || game.timer > CARD_FRAMES) return;
   if (game.timer > CARD_FRAMES - 30 && frame % 4 < 2) return;
   drawBox(ctx, 44, 110, 152, 50);
-  drawTextCentered(ctx, w.loop > 1 ? `LOOP ${w.loop}` : game.mode.name, W / 2, 120, GREY);
-  drawTextScaled(ctx, 'STAGE 1', Math.round(W / 2 - (textWidth('STAGE 1') * 2) / 2), 132, 2, YELLOW);
+  const sub = w.loop > 1 ? `LOOP ${w.loop} - ${w.stage.name}` : w.stage.name;
+  drawTextCentered(ctx, sub, W / 2, 120, GREY);
+  const title = `STAGE ${w.stageIdx + 1}`;
+  drawTextScaled(ctx, title, Math.round(W / 2 - (textWidth(title) * 2) / 2), 132, 2, YELLOW);
 }
 
 function warningCard(ctx: Ctx, w: World, frame: number) {
@@ -272,12 +285,12 @@ function warningCard(ctx: Ctx, w: World, frame: number) {
   drawTextScaled(ctx, t, Math.round(W / 2 - textWidth(t)), 133, 2, WHITE);
 }
 
-function drawPause(ctx: Ctx, game: Game, w: World) {
+function drawPause(ctx: Ctx, w: World) {
   ctx.fillStyle = 'rgba(0,0,0,0.6)';
   ctx.fillRect(0, 0, W, H);
   drawBox(ctx, 44, 120, 152, 76);
   drawTextCentered(ctx, 'PAUSED', W / 2, 130, YELLOW);
-  drawTextCentered(ctx, `${game.mode.name}  LOOP ${w.loop}`, W / 2, 144);
+  drawTextCentered(ctx, `STAGE ${w.stageIdx + 1}  LOOP ${w.loop}  SHIPS ${w.lives}`, W / 2, 144);
   drawTextCentered(ctx, 'ENTER RESUME', W / 2, 162, LIGHT);
   drawTextCentered(ctx, 'BKSP QUIT', W / 2, 176, GREY);
 }
@@ -347,7 +360,7 @@ function renderPlay(ctx: Ctx, game: Game, frame: number) {
   drawHud(ctx, game, w, frame);
   stageCard(ctx, game, w, frame);
   warningCard(ctx, w, frame);
-  if (game.phase === 'play' && game.paused) drawPause(ctx, game, w);
+  if (game.phase === 'play' && game.paused) drawPause(ctx, w);
   if (game.phase === 'clear') drawClear(ctx, game, w);
   if (game.phase === 'over') drawOver(ctx, game, w, frame);
 }
@@ -356,7 +369,7 @@ let menuTerrain: Terrain | null = null;
 
 /** Scrolling ground behind the menus, dimmed. */
 function backdrop(ctx: Ctx, game: Game, frame: number) {
-  menuTerrain ??= new Terrain(99);
+  menuTerrain ??= new Terrain(99, STAGES[0].ground);
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, W, H);
   menuTerrain.draw(ctx, game.titleDist % 3000, frame);
@@ -393,12 +406,11 @@ function drawLogo(ctx: Ctx, frame: number, y: number) {
 function renderTitle(ctx: Ctx, game: Game, frame: number) {
   backdrop(ctx, game, frame);
   drawLogo(ctx, frame, 40);
-  drawTextCentered(ctx, 'A VERTICAL SHOOTER', W / 2, 92, LIGHT);
+  drawTextCentered(ctx, 'STRIKE FIGHTER VEKTOR - SCRAMBLE', W / 2, 92, LIGHT);
 
-  drawBox(ctx, 28, 120, 184, 52);
+  drawBox(ctx, 28, 120, 184, 40);
   const s = game.settings;
   const values: Record<(typeof MENU)[number], string> = {
-    MODE: game.mode.name,
     MUSIC: MUSIC_NAMES[s.music],
     HELP: 'HOW TO PLAY',
   };
@@ -415,18 +427,17 @@ function renderTitle(ctx: Ctx, game: Game, frame: number) {
     }
   });
 
-  drawBox(ctx, 12, 180, 216, 66);
-  drawTextCentered(ctx, game.mode.blurb, W / 2, 190, YELLOW);
+  drawBox(ctx, 12, 168, 216, 54);
   const best = game.best();
-  drawTextCentered(ctx, best ? `TOP ${pad(best.score, 8)} ${best.name}` : 'NO RECORD YET', W / 2, 204, RED);
-  if ((frame >> 5) % 2 === 0) drawTextCentered(ctx, 'PRESS ENTER OR FIRE', W / 2, 218);
-  drawTextCentered(ctx, 'H SCORES   M MUSIC', W / 2, 232, GREY);
+  drawTextCentered(ctx, best ? `TOP ${pad(best.score, 8)} ${best.name}` : 'NO RECORD YET', W / 2, 178, RED);
+  if ((frame >> 5) % 2 === 0) drawTextCentered(ctx, 'PRESS ENTER OR FIRE', W / 2, 192, YELLOW);
+  drawTextCentered(ctx, 'H SCORES   M MUSIC', W / 2, 206, GREY);
   drawTextCentered(ctx, 'ARROWS MOVE  SPACE FIRE  X BOMB', W / 2, 300, LIGHT);
 }
 
 function renderScores(ctx: Ctx, game: Game, frame: number) {
   const entering = game.phase === 'entry';
-  const mode = MODES[game.scoresView];
+  const mode = game.mode;
   backdrop(ctx, game, frame);
 
   drawBox(ctx, 16, 40, 208, 176);
@@ -434,8 +445,7 @@ function renderScores(ctx: Ctx, game: Game, frame: number) {
   const world = game.scoresGlobal && !entering && !!game.global;
   const title = entering ? 'NEW RECORD!' : world ? 'WORLD SCORES' : 'LOCAL SCORES';
   drawTextCentered(ctx, title, W / 2, 48, entering ? YELLOW : WHITE);
-  drawTextCentered(ctx, entering ? mode.name : `< ${mode.name} >`, W / 2, 60, LIGHT);
-  const cols: [string, number][] = [['NAME', 40], ['SCORE', 88], ['LP', 150], ['MDL', 172]];
+    const cols: [string, number][] = [['NAME', 40], ['SCORE', 88], ['LP', 150], ['MDL', 172]];
   for (const [label, x] of cols) drawText(ctx, label, x, 72, GREY);
   ctx.fillStyle = '#585858';
   ctx.fillRect(26, 81, 188, 1);
@@ -446,7 +456,7 @@ function renderScores(ctx: Ctx, game: Game, frame: number) {
   for (let i = 0; i < MAX_SCORES; i++) {
     const y = 86 + i * 12;
     const e = list[i];
-    const mine = i === myRow && game.scoresView === game.settings.mode;
+    const mine = i === myRow;
     const color = mine ? (entering || blink ? YELLOW : WHITE) : i < 3 ? WHITE : LIGHT;
     const n = String(i + 1);
     drawText(ctx, n, 35 - textWidth(n), y, mine ? color : GREY);
@@ -468,7 +478,7 @@ function renderScores(ctx: Ctx, game: Game, frame: number) {
 
   drawBox(ctx, 16, 222, 208, 24);
   if (entering) drawTextCentered(ctx, 'TYPE NAME  THEN ENTER', W / 2, 230);
-  else drawTextCentered(ctx, game.global ? `< > MODE  UP ${world ? 'LOCAL' : 'WORLD'}  ENTER` : '< > MODE   ENTER BACK', W / 2, 230, blink ? WHITE : LIGHT);
+  else drawTextCentered(ctx, game.global ? `UP ${world ? 'LOCAL' : 'WORLD'} SCORES   ENTER BACK` : 'ENTER BACK', W / 2, 230, blink ? WHITE : LIGHT);
 }
 
 function renderHelp(ctx: Ctx, game: Game, frame: number) {

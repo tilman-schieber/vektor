@@ -4,7 +4,8 @@ import { Enemy, EnemyDef, ItemKind, makeEnemy, gone } from './enemies';
 import { Bullet } from './bullets';
 import { Boss } from './boss';
 import { Terrain } from './terrain';
-import { STAGE1, STAGE_LEN, Wave } from './stage1';
+import { STAGES } from './stages';
+import type { Stage } from './stage';
 import { sfx } from './audio';
 import { Rng } from './rng';
 
@@ -110,11 +111,14 @@ export const ITEM_CYCLE = 150;
 export class World {
   rng: Rng;
   terrain: Terrain;
-  /** Distance scrolled this loop, in pixels. */
+  /** Distance scrolled this stage, in pixels. */
   dist = 0;
   scroll = SCROLL;
+  /** Index into STAGES. */
+  stageIdx = 0;
+  /** How many times round all the stages, from 1. */
   loop = 1;
-  /** Bullet speed multiplier: harder mode, later loops. */
+  /** Bullet speed multiplier: faster every loop. */
   bulletSpeed = 1;
   state: WorldState = 'play';
   stateTimer = 0;
@@ -122,7 +126,7 @@ export class World {
 
   score = 0;
   lives: number;
-  /** Lives lost this loop, for the no-miss bonus. */
+  /** Lives lost this stage, for the no-miss bonus. */
   misses = 0;
   medalValue = 500;
   medals = 0;
@@ -148,18 +152,22 @@ export class World {
   /** Frames of white screen flash. */
   whiteout = 0;
 
-  private baseSpeed: number;
-  private waves: Wave[] = STAGE1;
   private waveIdx = 0;
   private later: { at: number; fn: () => void }[] = [];
 
-  constructor(rng: Rng, lives: number, hard: boolean) {
+  constructor(rng: Rng, lives: number) {
     this.rng = rng;
     this.lives = lives;
-    this.baseSpeed = hard ? 1.25 : 1;
-    this.bulletSpeed = this.baseSpeed;
-    this.terrain = new Terrain(1234);
+    this.terrain = new Terrain(1234, this.stage.ground);
     this.player = this.freshPlayer();
+  }
+
+  get stage(): Stage {
+    return STAGES[this.stageIdx];
+  }
+
+  private get waves() {
+    return this.stage.waves;
   }
 
   private freshPlayer(): Player {
@@ -181,11 +189,21 @@ export class World {
     return e;
   }
 
-  /** Starts the stage again, harder. The player keeps everything. */
-  nextLoop() {
-    this.loop++;
-    this.bulletSpeed = this.baseSpeed * (1 + 0.2 * (this.loop - 1));
+  /** On to the next stage; after the last, round again from the first, faster. The player keeps everything. */
+  nextStage() {
+    this.goTo(this.stageIdx + 1);
+  }
+
+  /** Starts stage i (counting on past the last into the next loop). */
+  goTo(i: number) {
+    this.loop += Math.floor(i / STAGES.length);
+    this.stageIdx = i % STAGES.length;
+    this.bulletSpeed = 1 + 0.2 * (this.loop - 1);
+    this.terrain = new Terrain(1234 + this.stageIdx * 77, this.stage.ground);
     this.dist = 0;
+    this.warning = 0;
+    // The ship left over the top at stage clear; it flies back in from the bottom.
+    if (this.player.alive) Object.assign(this.player, { x: W / 2, y: H + 24, timer: 50, invuln: Math.max(this.player.invuln, 60), bank: 0 });
     this.waveIdx = 0;
     this.enemies = [];
     this.bullets = [];
@@ -249,11 +267,11 @@ export class World {
 
   private runTimeline() {
     while (this.waveIdx < this.waves.length && this.dist >= this.waves[this.waveIdx].at) this.waves[this.waveIdx++].run(this);
-    if (!this.boss && this.warning === 0 && this.dist >= STAGE_LEN) {
+    if (!this.boss && this.warning === 0 && this.dist >= this.stage.length) {
       this.warning = 200;
       sfx.warning();
     }
-    if (this.warning > 0 && --this.warning === 0) this.boss = new Boss(this);
+    if (this.warning > 0 && --this.warning === 0) this.boss = new Boss(this, this.stage.boss);
   }
 
   /** The boss is down: everything still flying turns into points. */
@@ -603,7 +621,8 @@ export class World {
         if (e.dead || s.dead) continue;
         const half = s.kind === 'laser' ? s.width! / 2 : 2;
         const r = e.r ?? e.def.r;
-        if (Math.abs(e.x - s.x) > r + half || Math.abs(e.y - s.y) > r + 6) continue;
+        // Armour stops only what is really inside it; targets get a generous box.
+        if (e.armored ? Math.hypot(e.x - s.x, e.y - s.y) > r : Math.abs(e.x - s.x) > r + half || Math.abs(e.y - s.y) > r + 6) continue;
         if (s.kind === 'laser') {
           if (s.hit!.has(e)) continue;
           s.hit!.add(e);
@@ -629,6 +648,6 @@ export class World {
 
   /** How far through the stage, 0..1, for the music. */
   get progress() {
-    return Math.min(1, this.dist / STAGE_LEN);
+    return Math.min(1, this.dist / this.stage.length);
   }
 }

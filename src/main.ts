@@ -141,6 +141,7 @@ if (import.meta.env.DEV) {
     music,
     skipTo: (d: number) => game.skipTo(d),
     boss: () => game.bossNow(),
+    stage: (n: number) => game.gotoStage(n),
     god: () => game.world && (game.world.player.invuln = 1e9),
     /** Runs n frames with these actions held, then draws: for testing in a background tab. */
     sim: (n: number, held: Action[] = []) => {

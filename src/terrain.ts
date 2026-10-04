@@ -1,4 +1,4 @@
-// The ground: a grid of terrain levels at tile corners (0 ocean, 1 sand, 2 jungle, 3 base),
+// The ground: a grid of terrain levels at tile corners (stage 1: 0 ocean, 1 sand, 2 jungle, 3 base),
 // drawn with Wang tiles that pick their picture from their four corners.
 import { W, H, hash } from './draw';
 import { drawWangTile } from './tiles';
@@ -8,15 +8,8 @@ export const COLS = W / TILE;
 /** Map length in tile rows; past the end the last row repeats. */
 export const ROWS = 480;
 
-export const enum Level {
-  Ocean = 0,
-  Sand = 1,
-  Jungle = 2,
-  Base = 3,
-}
-
 /** Smooth value noise, roughly -1..1. */
-function noise(seed: number, x: number, y: number) {
+export function noise(seed: number, x: number, y: number) {
   const xi = Math.floor(x), yi = Math.floor(y);
   const fx = x - xi, fy = y - yi;
   const v = (a: number, b: number) => (hash(seed ^ hash(a * 7919 + b * 104729)) / 4294967296) * 2 - 1;
@@ -26,27 +19,16 @@ function noise(seed: number, x: number, y: number) {
   return top + (bot - top) * s(fy);
 }
 
-/** The stage's terrain level at corner (x, row), before smoothing. Row 0 is the start, at the bottom. */
-function profile(seed: number, x: number, j: number) {
-  const n = noise(seed, x / 3.5, j / 3.5) * 0.7 + noise(seed + 1, x / 1.5, j / 1.5) * 0.3;
-  if (j < 52) {
-    // Islands: broad low-frequency blobs, sand rings round a jungle middle.
-    const isle = noise(seed + 2, x / 5, j / 5) + n * 0.25;
-    if (j < 16 || isle < 0.45) return Level.Ocean;
-    return isle > 0.75 ? Level.Jungle : Level.Sand;
-  }
-  // The coast comes in on a slant.
-  const coast = 60 + Math.sin(x / 3) * 3 + (x - COLS / 2) * 0.7;
-  if (j < coast) return Level.Ocean;
-  if (j < 100) return j > 88 + n * 6 ? Level.Jungle : Level.Sand;
-  if (j < 205) {
-    // A river winds through the jungle.
-    const river = COLS / 2 + Math.sin(j / 9) * 4.5;
-    if (j > 122 && j < 172 && Math.abs(x - river) < 1.3) return Level.Ocean;
-    return n < -0.45 ? Level.Sand : Level.Jungle;
-  }
-  if (j < 212 + n * 4) return Level.Jungle;
-  return n > 0.6 ? Level.Jungle : Level.Base;
+/** What a stage's ground is made of. */
+export interface Ground {
+  /** Tileset per lower level: sets[k] blends level k into level k+1. */
+  sets: string[];
+  /** Fallback colours per level (base, light, dark) while the tiles are missing. */
+  colors: string[][];
+  /** Level 0 is water, with waves. */
+  water: boolean;
+  /** Terrain level at corner (x, row) before smoothing; row 0 is the start, at the bottom. */
+  profile(seed: number, x: number, j: number): number;
 }
 
 export class Terrain {
@@ -54,10 +36,10 @@ export class Terrain {
   levels: Uint8Array;
   private rows = new Map<number, HTMLCanvasElement>();
 
-  constructor(seed: number) {
+  constructor(seed: number, readonly ground: Ground) {
     const cw = COLS + 1;
     const lv = (this.levels = new Uint8Array(cw * (ROWS + 1)));
-    for (let j = 0; j <= ROWS; j++) for (let x = 0; x < cw; x++) lv[j * cw + x] = profile(seed, x, j);
+    for (let j = 0; j <= ROWS; j++) for (let x = 0; x < cw; x++) lv[j * cw + x] = ground.profile(seed, x, j);
     // No specks or one-corner-wide strips: a corner needs two orthogonal neighbours at least as
     // high, or it sinks a level; and one hemmed in on three sides is filled up.
     const get = (x: number, j: number) => lv[Math.min(ROWS, Math.max(0, j)) * cw + Math.min(cw - 1, Math.max(0, x))];
@@ -123,7 +105,7 @@ export class Terrain {
     const g = c.getContext('2d')!;
     for (let i = 0; i < COLS; i++) {
       const nw = this.at(i, r + 1), ne = this.at(i + 1, r + 1), sw = this.at(i, r), se = this.at(i + 1, r);
-      drawWangTile(g, [nw, ne, sw, se], i * TILE, 0, hash(r * 64 + i));
+      drawWangTile(g, this.ground, [nw, ne, sw, se], i * TILE, 0, hash(r * 64 + i));
     }
     this.rows.set(r, c);
     return c;
@@ -136,7 +118,7 @@ export class Terrain {
       // Screen y of the row's top edge: world height (r+1)*16.
       const y = H - ((r + 1) * TILE - d);
       ctx.drawImage(this.row(Math.min(r, ROWS - 1)), 0, y);
-      this.glints(ctx, Math.min(r, ROWS - 1), y, frame);
+      if (this.ground.water) this.glints(ctx, Math.min(r, ROWS - 1), y, frame);
     }
     for (const r of this.rows.keys()) if (r < first - 2 || r > first + 40) this.rows.delete(r);
   }

@@ -102,3 +102,39 @@ Each tile looks like this:
 - `pattern_4x4` encodes the same information as numbers: the center 2x2 is `[NW,NE]` / `[SW,SE]`, with 0 = lower, 1 = upper and 255 = wildcard.
 - The tile's position in the sheet is `bounding_box` (pixel rect). Do not use `name` (`wang_N`) or `original_position` for slicing.
 - The all-lower and all-upper tiles have the base tile UUID as their `id`.
+
+---
+
+# Stage 2 (desert / refinery)
+
+Generations spent: 97 (balance went from 1240 to 1143). Palette: sand, ochre and khaki military colours with orange and red accents. Sprites were cleaned with the same stray-cluster removal and re-centering as stage 1. Flips are mirror-only, with no resampling.
+
+## Tilesets (create_topdown_tileset, 16px, high top-down, medium shading, standard mode, shape_style round, transition 0.5)
+
+| file | tileset id | lower → upper | transition | notes |
+|---|---|---|---|---|
+| tiles/desert_rock.png/.json/_example.png | a5400aa1-5378-4408-ba9c-b560a2061755 | "orange desert sand dunes with wind ripples" → "dark brown rocky mesa plateau, cracked stone" | "crumbling rock cliff edge with scattered pebbles, irregular organic edge" | Rock is the raised terrain, with cliff faces dropping to the sand. |
+| tiles/rock_metal.png/.json/_example.png | 9d4f05ad-3201-4d79-86cf-0a29917b7300 | rock (lower_base_tile_id d0bc8769…) → "industrial refinery floor of grey steel plates with rust patches, rivets, metal pipes and yellow black hazard stripes" | "concrete curb and gravel edge, irregular organic boundary", text_guidance 12 | Metal is raised, with a concrete curb. Replaces 8547dda9-0cc0-48b1-9921-2e018225f069 (prompt "industrial refinery floor, rusty metal plates, pipes and yellow hazard stripes"), whose upper terrain came out as plain tan dirt. |
+
+Base tile ids:
+- sand: `e4b0dbe0-e4b2-45c7-86a0-1b8e6c69c0f2`
+- rock (upper of desert_rock, lower of rock_metal): `d0bc8769-4dc7-484d-a5fe-00380c0da27e`. The all-rock tile in the two sheets differs by at most 3 per channel.
+- refinery metal: `e460620f-5720-4477-ace8-c3dddc7fc5ce`
+
+The JSON format is the same as stage 1: `format` `"tileset15"`, 16 tiles in a 4x4 grid, with `corners` and `bounding_box` on each tile.
+
+## Enemies
+
+| path | tool | prompt | size | id | notes |
+|---|---|---|---|---|---|
+| enemies/interceptor.png | create_1_direction_object (64-grid at 24px, style ref = enemies/fighter.png) | grid: "hostile desert military aircraft seen from directly above, nose facing down, sand khaki desert camouflage with orange and red accents…"; frame 25 is from the generic grid prompt | 24x24 | review 6514a4fc…, frame 25 → 418eea01-cf2a-4509-a910-a575bdad1083 | Drawn nose-up, so it was flipped vertically. Swept wings with orange and red wing edges. |
+| enemies/bomber.png | create_1_direction_object (16-grid at 64px, style ref = gunship padded to 64) | "big slow four-engine heavy bomber airplane seen from directly above, nose pointing down, wide straight wings with four propeller engines, sand and khaki desert camouflage with orange and red markings…" | 64x64 | review 2fd61f2e…, frame 2 → ef962f44-6d1e-4fc0-b8a2-fab00b28aa93 | Already faces down, so it was not flipped. The bbox is 62x50. |
+| enemies/artillery.png | create_1_direction_object (64-grid at 32px, style refs = bunker + player) | item: "octagonal concrete artillery emplacement from above with a round metal turntable ring in the center, no barrel, tan and orange" | 32x32 | review f71f7c26…, frame 7 → 5cf71534-eb2e-441e-9219-58daf6fc2a26 | The turntable ring centre is about (15.5,15). The grid's sandbag-ring candidates (frames 4-6) were deleted with the review. |
+| enemies/artillery_barrel.png | drawn by hand (PIL) | n/a | 32x32 | n/a | A round khaki cap with radius 6 at the canvas centre (15.5,15.5), and a 6px-wide barrel with a reinforcing band and a muzzle brake running down to y=31. The sprite is symmetric about x=15.5. Pivot = canvas centre. |
+
+## Boss
+
+| path | tool | prompt | seed | size | id | notes |
+|---|---|---|---|---|---|---|
+| boss/boss2.png | create_image_pixflux img2img (init = hand-drawn composition sketch of hull, tracks, 4 domes, hatch and cannon; init_image_strength 60) | "top-down view of a giant armored desert land battleship crawler boss on wide tank tracks, facing down, four round armored gun turret domes with short cannons, central armored hatch over the main cannon, sand ochre khaki camo armor plates, panel lines, rivets, vents, orange and red hazard stripes, highly detailed, symmetrical, arcade shmup boss" (south, high top-down, black outline, medium shading) | 203 | 128x96 | job 758d1741-f372-4cfb-b785-6f07a237d5ec | Pure text-to-image (seeds 11-88) gave tanks without four domes. The other img2img tries were strengths 45, 60, 80, 150 and 220. Turret dome centres: (36,30) (91,30) (36,68) (91,68). The hatch box is x48-80, y34-62, and the main cannon points down to y≈83. |
+| boss/boss2_open.png | inpaint_image on boss2.png, mask x47 y33 w35 h31 | "the central armored hatch doors slid open to both sides, revealing a round glowing reactor core inside, bright yellow-white hot center surrounded by orange and red glowing energy rings, dark metal frame around the open pit, top-down view" | 7 | 128x96 | job d4c64510-4453-4429-aa0c-1af81e938890 | Every pixel outside the mask is identical to boss2.png. Reactor core centre ≈ (64,47). |

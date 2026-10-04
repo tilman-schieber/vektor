@@ -92,10 +92,12 @@ const gunship: EnemyDef = {
     else e.vy = Math.min(0.9, e.vy + 0.01);
     e.vx = Math.sin(e.t / 60) * 0.5;
     if (e.y < 10 || e.t > 520) return;
-    if (e.t % 80 === 40) aimed(w, e.x, e.y + 14, 5 + loopShots(w) * 2, 0.22, 2.0);
-    if (e.t % 80 === 0) {
-      fan(w, e.x - 12, e.y + 10, 0, 3, 0.35, 1.6, true);
-      fan(w, e.x + 12, e.y + 10, 0, 3, 0.35, 1.6, true);
+    // An aimed spread with gaps wide enough to slip through, then one gun at a time lobs a pair
+    // of big slow bullets.
+    if (e.t % 100 === 30) aimed(w, e.x, e.y + 14, 3 + loopShots(w) * 2, 0.3, 1.8);
+    if (e.t % 100 === 80) {
+      const side = (e.t / 100) % 2 < 1 ? -1 : 1;
+      fan(w, e.x + side * 12, e.y + 10, 0, 2, 0.5, 1.4, true);
     }
   },
 };
@@ -150,7 +152,67 @@ const bunker: EnemyDef = {
   },
 };
 
-/** A piece of the boss: positioned by the boss, never moves by itself. */
+/**
+ * Interceptor: comes up from behind the player at column p[0], overshoots to row p[1],
+ * turns, fires and dives back down.
+ */
+const interceptor: EnemyDef = {
+  name: 'interceptor',
+  sprite: 'enemies/interceptor',
+  hp: 3,
+  score: 300,
+  r: 9,
+  ground: false,
+  update(e, w) {
+    const row = e.p[1] ?? 70;
+    if (e.t === 0) e.vy = -3.6;
+    if (e.y < row || e.vy > -3.6) e.vy = Math.min(2.4, e.vy + 0.12);
+    // Once turned it leans toward the player.
+    if (e.vy > 0) e.vx += Math.sign(w.player.x - e.x) * 0.03;
+    if (e.vy > 0 && !e.p[2]) {
+      e.p[2] = 1;
+      aimed(w, e.x, e.y, 1 + loopShots(w) * 2, 0.22, 2.2);
+    }
+  },
+};
+
+/** Bomber: big and slow, straight down the screen, rings of slow bullets and aimed pairs. */
+const bomber: EnemyDef = {
+  name: 'bomber',
+  sprite: 'enemies/bomber',
+  hp: 90,
+  score: 4000,
+  r: 26,
+  ground: false,
+  big: true,
+  update(e, w) {
+    e.vy = e.t < 50 ? 1.1 : 0.42;
+    e.vx = 0;
+    if (e.y < 16) return;
+    if (e.t % 120 === 60) ring(w, e.x, e.y + 8, 8 + loopShots(w) * 4, 1.1, e.t / 37, true);
+    if (e.t % 120 === 0) aimed(w, e.x, e.y + 20, 2, 0.3, 1.9);
+  },
+};
+
+/** Artillery: a long gun on a turntable. Slow to turn, fires bursts of three heavy shells. */
+const artillery: EnemyDef = {
+  name: 'artillery',
+  sprite: 'enemies/artillery',
+  hp: 24,
+  score: 1200,
+  r: 13,
+  ground: true,
+  update(e, w) {
+    e.vx = 0;
+    e.vy = w.scroll;
+    turn(e, aimAt(w, e.x, e.y), 0.03);
+    if (e.y < 24) return;
+    const k = e.t % 160;
+    if (k === 80 || k === 92 || k === 104) fan(w, e.x + Math.sin(e.aim) * 13, e.y + Math.cos(e.aim) * 13, e.aim, 1, 0, 1.7, true);
+  },
+};
+
+/** A piece of a boss: positioned by the boss, never moves by itself. */
 const part: EnemyDef = {
   name: 'part',
   sprite: '',
@@ -162,6 +224,9 @@ const part: EnemyDef = {
   update() {},
 };
 
+/** A piece of a boss on the ground: the player can fly over it. */
+const groundPart: EnemyDef = { ...part, ground: true };
+
 /** Turns the turret toward `want` by at most `rate` radians. */
 function turn(e: Enemy, want: number, rate: number) {
   let d = want - e.aim;
@@ -170,7 +235,7 @@ function turn(e: Enemy, want: number, rate: number) {
   e.aim += Math.max(-rate, Math.min(rate, d));
 }
 
-export const ENEMIES = { fighter, gunship, carrier, tank, bunker, part };
+export const ENEMIES = { fighter, gunship, carrier, tank, bunker, interceptor, bomber, artillery, part, groundPart };
 export type EnemyName = keyof typeof ENEMIES;
 
 export function makeEnemy(def: EnemyDef, x: number, y: number, p: number[] = []): Enemy {
