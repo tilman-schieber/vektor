@@ -23,7 +23,7 @@ export interface Stage {
 }
 
 type Run = (w: World) => void;
-const { fighter, gunship, carrier, tank, bunker, interceptor, bomber, artillery, destroyer, drone } = ENEMIES;
+const { fighter, gunship, carrier, tank, bunker, interceptor, bomber, artillery, destroyer, drone, heli, popup } = ENEMIES;
 
 /** n fighters diving one after another down column x. */
 export const dive = (x: number, n = 5, gap = 12): Run => (w) => {
@@ -76,5 +76,25 @@ export const swarm = (cx: number, n = 8, radius = 30): Run => (w) => {
 
 /** A destroyer coming down column x, sailing up at `speed` (so slower than the ground) and drifting by vx. */
 export const ship = (x: number, speed = 0.25, vx = 0): Run => (w) => void w.spawn(destroyer, x, -34, [speed, vx]);
+
+/** Fighters that come down column x one after another and loop the loop at row `row`. */
+export const loops = (x: number, n = 4, row = 120): Run => (w) => {
+  for (let k = 0; k < n; k++) w.after(k * 14, () => w.spawn(fighter, x, -12, [3, row, 999]));
+};
+
+/** Pairs of fighters crossing on diagonals from both top corners. */
+export const cross = (pairs = 3): Run => (w) => {
+  for (let k = 0; k < pairs; k++)
+    w.after(k * 22, () => {
+      w.spawn(fighter, -12, -12, [4, 0, 10]);
+      w.spawn(fighter, W + 12, -12, [4, 0, 30]);
+    });
+};
+
+/** A helicopter dropping in at column x to row `row`, then strafing toward the far side. */
+export const chopper = (x: number, row = 80, drop?: ItemKind): Run => (w) => void w.spawn(heli, x, -18, [row, x < W / 2 ? 1 : -1], drop);
+
+/** Pop-up turrets at these columns, each a little out of step with the last. */
+export const hatch = (...xs: number[]): Run => (w) => xs.forEach((x, k) => void w.spawn(popup, x, -18, [k * 37]));
 
 export const both = (...fns: Run[]): Run => (w) => fns.forEach((f) => f(w));

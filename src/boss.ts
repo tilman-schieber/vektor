@@ -15,8 +15,10 @@ export interface BossDef {
   ground: boolean;
   /** Gun pod centres relative to the boss centre. */
   pods: [number, number][];
-  /** Pods carry a gun barrel drawn in code that tracks the player. */
-  turrets: boolean;
+  /** Pods carry a gun barrel drawn in code that tracks the player: all of them, or these indices. */
+  turrets: boolean | number[];
+  /** Extra per-frame offset of pod i, for parts that move (a walker's legs). */
+  podOffset?(b: Boss, i: number): [number, number];
   podHp: number;
   coreHp: number;
   coreY: number;
@@ -80,7 +82,14 @@ export class Boss {
   /** Where pod i sits now. */
   podPos(i: number): [number, number] {
     const [dx, dy] = this.def.pods[i];
-    return [this.x + dx, this.y + dy];
+    const [ox, oy] = this.def.podOffset?.(this, i) ?? [0, 0];
+    return [this.x + dx + ox, this.y + dy + oy];
+  }
+
+  /** Pod i has a gun barrel. */
+  hasGun(i: number) {
+    const t = this.def.turrets;
+    return t === true || (Array.isArray(t) && t.includes(i));
   }
 
   get coreX() {
@@ -298,6 +307,62 @@ export const BATTLESHIP: BossDef = {
         ring(w, c.x, c.y, 10, 1.25, b.spin);
       }
       if (b.t % 70 === 35) aimed(w, c.x, c.y + 12, 1, 0, 2.6, true);
+    }
+  },
+};
+
+// ---------- stage 4: the walker ----------
+
+/** The walker's stride: a leg's swing, 0..2π. Leg 0 and leg 1 are half a stride apart. */
+const stride = (b: Boss, leg: number) => b.t / 30 + leg * Math.PI;
+
+export const WALKER: BossDef = {
+  sprite: 'boss/boss4',
+  openSprite: 'boss/boss4_open',
+  ground: true,
+  // Shoulder cannons, then the legs.
+  pods: [
+    [-42, -22],
+    [42, -22],
+    [-22, 12],
+    [21, 12],
+  ],
+  turrets: [0, 1],
+  podOffset: (b, i) => (i < 2 ? [0, 0] : [0, Math.sin(stride(b, i - 2)) * 6]),
+  podHp: 110,
+  coreHp: 720,
+  coreY: -16,
+  bodyY: -40,
+  bodyR: 20,
+  hoverY: 92,
+  act(b, w) {
+    const c = b.core;
+    b.x = W / 2 + Math.sin(b.t / 200) * 20;
+    b.y = 92 + Math.abs(Math.sin(b.t / 30)) * 2;
+    // Each time a foot comes down the ground shakes, and a live leg sends out a ring.
+    for (const leg of [0, 1]) {
+      const now = Math.sin(stride(b, leg)), before = Math.sin(stride(b, leg) - 1 / 30);
+      if (!(before > 0 && now <= 0)) continue;
+      const pod = b.pods[2 + leg];
+      w.shake = Math.max(w.shake, pod.dead ? 2 : 5);
+      if (!pod.dead && b.phase === 1) ring(w, pod.x, pod.y + 8, 8 + w.loop * 2, 1.1, b.t / 20, true);
+    }
+    if (b.phase === 1) {
+      [0, 1].forEach((i) => {
+        const pod = b.pods[i];
+        if (!pod.dead && (b.t + i * 40) % 80 === 0) fan(w, pod.x + Math.sin(pod.aim) * 10, pod.y + Math.cos(pod.aim) * 10, pod.aim, 5, 0.18, 1.9);
+      });
+    } else if (b.phase === 2) {
+      // A stream of shots hosed side to side, with gaps to slip through.
+      if (b.t % 7 === 0) shoot(w, c.x, c.y + 8, Math.sin(b.t / 40) * 0.9, 2.2);
+      if (b.t % 120 === 60) ring(w, c.x, c.y, 12 + w.loop * 2, 1.3, b.t / 30);
+    } else {
+      if (b.t % 8 === 0 && canFire(w, c.x, c.y)) {
+        const a = Math.sin(b.t / 36) * 0.9;
+        shoot(w, c.x, c.y + 8, a, 2.1);
+        shoot(w, c.x, c.y + 8, -a, 2.1);
+      }
+      if (b.t % 80 === 40) aimed(w, c.x, c.y + 8, 3, 0.2, 2.6, true);
     }
   },
 };

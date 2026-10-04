@@ -32,6 +32,10 @@ export interface Ground {
   profile(seed: number, x: number, j: number): number;
   /** Dressing for the open ground of one level: painted markings and props. */
   decor?: Decor;
+  /** Railway lines: down corner column `col`, from tile row `from` to `to`. */
+  rails?: { col: number; from: number; to: number }[];
+  /** Night: searchlights sweep the ground. */
+  night?: boolean;
 }
 
 export interface Decor {
@@ -42,6 +46,15 @@ export interface Decor {
   density: number;
   /** Dashed taxi lines and parking bays painted on the ground. */
   markings: boolean;
+}
+
+/** One tile row of railway at pixel column x: sleepers and two rails. */
+function drawRails(g: CanvasRenderingContext2D, x: number) {
+  g.fillStyle = '#2a2420';
+  for (let y = 1; y < TILE; y += 4) g.fillRect(x - 7, y, 14, 2);
+  g.fillStyle = '#8a9098';
+  g.fillRect(x - 5, 0, 1, TILE);
+  g.fillRect(x + 4, 0, 1, TILE);
 }
 
 export class Terrain {
@@ -120,6 +133,7 @@ export class Terrain {
       const nw = this.at(i, r + 1), ne = this.at(i + 1, r + 1), sw = this.at(i, r), se = this.at(i + 1, r);
       drawWangTile(g, this.ground, [nw, ne, sw, se], i * TILE, 0, hash(r * 64 + i));
     }
+    for (const rl of this.ground.rails ?? []) if (r >= rl.from && r < rl.to) drawRails(g, rl.col * TILE);
     if (this.ground.decor) this.decorate(g, r, this.ground.decor);
     this.rows.set(r, c);
     return c;
@@ -152,14 +166,15 @@ export class Terrain {
     }
     const props = named(d.props);
     if (!props.length) return;
-    // A prop covers 2x2 tiles from an even anchor; row r shows the anchor rows r and r-1.
+    // A prop covers 2x2 tiles from an anchor on an even row; row r shows the anchor rows r and r-1.
     for (const ra of [r, r - 1]) {
       if (ra % 2) continue;
-      for (let i = 0; i < COLS - 1; i += 2) {
-        if (i % 5 === 2 || (i + 1) % 5 === 2) continue;
+      for (let i = 0; i < COLS - 1; i++) {
+        if (d.markings && (i % 5 === 2 || (i + 1) % 5 === 2)) continue;
         const h = hash(ra * 131 + i * 7 + 5);
         if (h % 100 >= d.density || !this.flat(i, ra, 2, d.level)) continue;
         g.drawImage(spr(props[(h >>> 8) % props.length]), i * TILE, (r - ra - 1) * TILE);
+        i++; // the next column is covered
       }
     }
   }

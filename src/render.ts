@@ -1,14 +1,14 @@
 import { Game, MENU, MUSIC_NAMES, NAME_LEN, CARD_FRAMES, TALLY_AT } from './game';
 import { World, Shot, Blast, Item, MAX_LEVEL } from './world';
-import { Enemy, DESTROYER_GUNS } from './enemies';
+import { Enemy, DESTROYER_GUNS, popupOpen } from './enemies';
 import { aimAt } from './bullets';
 import { Boss } from './boss';
 import { STAGES } from './stages';
-import { Terrain } from './terrain';
+import { Terrain, TILE } from './terrain';
 import { MAX_SCORES } from './scores';
 import { HELP_PAGES, wrapText } from './help';
 import { drawText, drawTextCentered, drawTextScaled, drawTextShadow, textWidth } from './font';
-import { Ctx, W, H, WHITE, RED, GREY, LIGHT, DARK, YELLOW, GOLD, BLUE, drawBox, disc, pad } from './draw';
+import { Ctx, W, H, WHITE, RED, GREY, LIGHT, DARK, YELLOW, GOLD, BLUE, drawBox, disc, pad, hash } from './draw';
 import { spr, has, frames, flash, shadow, rotated, stepFor, drawAt } from './sprites';
 
 export { W, H };
@@ -61,7 +61,13 @@ function drawGroundEnemy(ctx: Ctx, e: Enemy, w: World, frame: number) {
     drawAt(ctx, rotated('enemies/tank_turret', stepFor(Math.sin(e.aim), Math.cos(e.aim))), e.x, e.y);
     return;
   }
+  if (e.def.name === 'popup') {
+    const name = popupOpen(e) ? 'enemies/popup_open' : 'enemies/popup_closed';
+    drawAt(ctx, e.flash > 0 ? flash(name) : spr(name), e.x, e.y);
+    return;
+  }
   drawAt(ctx, enemySprite(e), e.x, e.y);
+  if (e.def.name === 'trainCar') drawBarrel(ctx, e.x, e.y, e.aim, 11);
   if (e.def.name === 'artillery') drawAt(ctx, rotated('enemies/artillery_barrel', stepFor(Math.sin(e.aim), Math.cos(e.aim))), e.x, e.y);
 }
 
@@ -167,7 +173,7 @@ function drawBoss(ctx: Ctx, b: Boss, frame: number) {
       // Wrecked pods smoke and burn.
       disc(ctx, x, y, 8, '#202020');
       disc(ctx, x + ((frame >> 2) % 3) - 1, y - 2, 3 + (frame % 3), frame % 4 < 2 ? '#f87800' : '#f8d838');
-    } else if (b.def.turrets) drawBarrel(ctx, x, y, pod.aim);
+    } else if (b.hasGun(i)) drawBarrel(ctx, x, y, pod.aim);
   });
   // The core glows once open, and pulses fast in a rage.
   if (b.open && b.dying < 0) {
@@ -176,6 +182,45 @@ function drawBoss(ctx: Ctx, b: Boss, frame: number) {
     disc(ctx, b.coreX, b.coreY, r + 2, '#f83800');
     disc(ctx, b.coreX, b.coreY, r - 1, b.core.flash ? WHITE : '#f8d838');
   }
+}
+
+/** Two blurred blades spinning over a helicopter's hub. */
+function drawRotor(ctx: Ctx, x: number, y: number, frame: number) {
+  const a = frame * 0.9;
+  ctx.fillStyle = 'rgba(200,210,220,0.55)';
+  for (const off of [0, Math.PI / 2]) {
+    const dx = Math.cos(a + off), dy = Math.sin(a + off);
+    for (let k = -15; k <= 15; k++) ctx.fillRect(Math.round(x + dx * k), Math.round(y + dy * k), 1, 1);
+  }
+  ctx.fillStyle = '#202020';
+  ctx.fillRect(Math.round(x) - 1, Math.round(y) - 1, 3, 3);
+}
+
+/** Searchlights on the ground, each a cone sweeping to and fro, anchored to the map as it scrolls. */
+function drawSearchlights(ctx: Ctx, w: World) {
+  const SPACING = 13;
+  const first = Math.floor(w.dist / TILE / SPACING) - 1;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (let k = first; k < first + 3 + H / TILE / SPACING; k++) {
+    const h = hash(k * 7919 + 13);
+    const x = 24 + (h % (W - 48));
+    const y = H - ((k * SPACING + 6) * TILE - w.dist);
+    const a = (h & 1 ? Math.PI : 0) + Math.sin(w.frame / 80 + k) * 0.75;
+    const len = 110, spread = 0.13;
+    ctx.fillStyle = 'rgba(255,236,170,0.10)';
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.sin(a - spread) * len, y + Math.cos(a - spread) * len);
+    ctx.lineTo(x + Math.sin(a + spread) * len, y + Math.cos(a + spread) * len);
+    ctx.closePath();
+    ctx.fill();
+    // The pool of light where the beam lands.
+    ctx.beginPath();
+    ctx.ellipse(x + Math.sin(a) * len, y + Math.cos(a) * len, 15, 15, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 /** The playing field: ground, things on it, shadows, things in the air, bullets on top. */
@@ -187,6 +232,8 @@ function drawWorld(ctx: Ctx, w: World, frame: number) {
   if (w.boss?.def.ground) drawBoss(ctx, w.boss, frame);
   for (const b of w.blasts) if (b.ground) drawBlast(ctx, b);
 
+  if (w.terrain.ground.night) drawSearchlights(ctx, w);
+
   // Shadows of everything in the air.
   for (const e of w.enemies) if (!e.def.ground && e.def.sprite) drawShadow(ctx, e.def.sprite, e.x, e.y);
   const b = w.boss;
@@ -195,7 +242,11 @@ function drawWorld(ctx: Ctx, w: World, frame: number) {
 
   for (const s of w.shots) drawShot(ctx, s, frame);
   if (b && !b.def.ground) drawBoss(ctx, b, frame);
-  for (const e of w.enemies) if (!e.def.ground && e.def.sprite) drawAt(ctx, enemySprite(e), e.x, e.y);
+  for (const e of w.enemies) {
+    if (e.def.ground || !e.def.sprite) continue;
+    drawAt(ctx, enemySprite(e), e.x, e.y);
+    if (e.def.name === 'heli') drawRotor(ctx, e.x, e.y, w.frame);
+  }
   for (const it of w.items) if (it.kind !== 'medal') drawItem(ctx, it, frame);
   for (const b of w.blasts) if (!b.ground) drawBlast(ctx, b);
   for (const q of w.particles) {

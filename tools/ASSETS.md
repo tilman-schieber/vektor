@@ -197,3 +197,59 @@ Grid: create_1_direction_object, review 331dc825… (now dismissed), style ref =
 | decor/arctic_truck.png | 62 | 82d1655e-061f-4818-9a03-72eaa8ee5b1e | A navy truck with a canvas bed, facing left. It is a side/3/4 view (the wheels are visible), as all truck candidates were. |
 
 Lesson: the grid's 8-per-prop repetition gives very consistent candidates, so one grid was enough. The trucks, hangars and radars all came out in 3/4 view rather than a true top-down view, which matches the bunker style ref.
+
+---
+
+# Stage 4 (night city: downtown, river, power plant)
+
+Generations spent: 73 (balance went from 1035 to 962). Palette: deep navy and black, dark gunmetal military grey with red lights, warm yellow windows, and cyan/magenta neon. Layout sketches and previews were made with PIL in the session scratchpad and are not kept in the repo. All sprites are RGBA with no partial alpha. Flips are mirror-only, and the trains were stretched only by duplicating whole rows.
+
+## Tilesets (create_topdown_tileset, 16px, high top-down, single color outline, medium shading, medium detail, standard mode)
+
+| file | tileset id | lower → upper | transition | notes |
+|---|---|---|---|---|
+| tiles/river_street.png/.json/_example.png | 934263d0-62bb-484a-9b2f-e95a2f44ada3 | "dark river water at night with yellow light reflections" (lower_base e38055ac…) → "very dark charcoal black asphalt road at night, almost black, with thin faded white lane markings" | "dark grey concrete embankment wall", round, 0.5, text_guidance 12 | The asphalt came out dark navy and plain: no lane markings are visible. Replaces 549dd405-83bf-430e-bfe5-4693cb054f5b ("dark asphalt city street at night with faint lane markings"), whose street was light daytime grey. With shape_style, the tool's "enhance" step rewrites the prompts and tends to brighten "dark" terrain. |
+| tiles/street_roof.png/.json/_example.png | 794783f5-bcd1-4c2f-b1e4-451bc4a73dbf | asphalt (lower_base 7a4e651c…) → "dark flat city rooftops at night with lit skylights and glowing yellow windows" (upper_base a872ce34…) | "tall building wall facade with rows of bright glowing yellow lit windows below a concrete parapet", **square**, 0.25, text_guidance 10 | Dark brick-pattern roofs inside a grey parapet, with yellow window rows on the facade edges. The all-roof tile has no skylights (the decor provides them). Rejected: 399a343d… (light asphalt) and 59e6ef77… (same chain, but "building edge with concrete parapet" gave almost no windows). |
+| tiles/roof_plant.png/.json/_example.png | 3e77fdab-c931-4cd8-a99e-2aaa9589eb53 | roof (lower_base a872ce34…) → "power plant floor, dark metal grating with glowing cyan power cables" | "steel retaining wall with yellow hazard stripes", **square**, 0.25 | Blue-teal grating with orange and yellow hazard-dot edges and cyan glowing ports along the bottom edges. The cyan cables on the all-plant tile are faint. |
+
+Base tile ids (the all-X tile in neighbouring sheets is pixel-identical, max diff 0):
+- river water: `e38055ac-d1de-45ac-ad9e-9df44a213c38`
+- night asphalt: `7a4e651c-6abc-4f0f-bbbe-aa36f51e1a2d`. The old grey asphalt `f77b1ee7…` is not used.
+- rooftop: `a872ce34-8279-427b-8a67-82eba02451ea`
+- power-plant grating: `e149ccfb-db21-42a0-a085-c39c38b7a830`
+
+## Enemies (one 64-candidate create_1_direction_object grid at 32px, style ref = enemies/carrier.png, review 01b3f78e…, now dismissed; tag `city_enemies`)
+
+Grid description: "hostile military vehicle seen from directly above, facing down, dark gunmetal grey armor with glowing red lights, night city, black outline, medium shading". It used 24 heli items, 16 closed hatches, 8 open hatches, 4 rail cars and 4 locomotives.
+
+| path | source | size | notes |
+|---|---|---|---|
+| enemies/heli.png | frame 16 ("helicopter gunship fuselage from directly above without rotor, cockpit at the bottom, tail at the top…") | 32x32 | Already nose-down (glass canopy at the bottom). The detached tail fin was joined to the body with a hand-drawn 4px boom. A 6px dark rotor hub was hand-drawn at the canvas centre, **(15.5,15.5)** (pixels 13-18). There are no rotor blades. Frame 18 is an alternative. |
+| enemies/train_engine.png | frame 54 | 24x40 | Front (red lights and yellow headlights) at the bottom. Stretched from 18x32 by duplicating rows 17 (x4) and 23 (x3). Sprite occupies x3-20, y1-39. |
+| enemies/train_car.png | frame 49 | 24x40 | Stretched from 18x31 (rows 5 and 24 x4). The generated black hole was repainted to plain hull, and a hand-drawn round turret mount ring (no barrel) was added at **(11.5,19.5)**: ellipse x5-18, y13-26. There are panel seams at y8/y31 and red corner lights. |
+| enemies/popup_closed.png | frame 34 (iris hatch) | 24x24 | Cropped from (4,4) and given a 1px black outline. Hatch centre (11.5,11.5). |
+| enemies/popup_open.png | drawn by hand (PIL) on popup_closed | 24x24 | The outer rim is identical to the closed hatch. Inside r<7.7 it has a dark pit edge, a red/orange glow ring, and a shaded gunmetal turret mount (r 4) with a dark socket and an orange centre pixel at (11.5,11.5). There is no barrel. The generated open-hatch candidates (frames 41-47) did not match any closed design. |
+
+## Boss
+
+| path | tool | prompt | seed | size | id | notes |
+|---|---|---|---|---|---|---|
+| boss/boss4.png | create_image_pixflux img2img (init = PIL sketch: torso, 2 shoulder pods with round mounts, cockpit hatch, hips, legs and feet; **init_image_strength 60**, detailed shading, highly detailed) | "top-down view of a giant bipedal walking mech boss seen from directly above, facing down, wide armored torso with a round closed cockpit hatch in the middle, two big round shoulder cannon pods on left and right, two armored legs with round hip joints and big feet below, dark gunmetal grey armor plates, panel lines, rivets, vents, red and orange accent lights, symmetrical, arcade shmup boss" | 404 | 128x128 | job c53bcdf5-c82c-43e7-ab91-89d690c96a8b | Post-processing: the left half was mirrored onto the right (axis x=63.5) because the legs had different accents. Two 17px round armoured hip joints were hand-drawn, and the whole sprite was shifted up 10px, giving bbox x7-120, y16-116. Coordinates: **cannon mounts (21.5,42) and (105.5,42)**, **hip joints (42,76) and (85,76)**, **cockpit/core (63.5,47-48.5)**. Strengths 100-180 (seeds 401-403) only traced the flat sketch, and 40 (seed 405) lost the layout. Strength 70 (seed 406) and 55 (seed 407) were also tried. |
+| boss/boss4_open.png | inpaint_image on the raw pixflux output (job URL), mask x55 y49 w18 h18 | "the round cockpit hatch slid open, revealing a round glowing reactor core inside, bright yellow-white hot center surrounded by orange and red glowing energy rings, dark metal frame around the open pit, top-down view" | 7 | 128x128 | job 4b756bf2-eeda-4f52-b155-7b9f5806815b | Only the 18x18 mask box was pasted onto boss4.png at (55,39), which accounts for the 10px shift. The RGB difference from boss4.png is confined to x55-72, y39-56. Reactor core centre **(63.5,48.5)**. The core is a slightly squarish glow. |
+
+## Decor (rooftop props, 32x32; one 64-grid create_1_direction_object at size 32, no style ref, review 34d33b83…, now dismissed; tag `city_decor`)
+
+Grid description: "flat rooftop prop on a dark city building roof at night, seen from directly above, top-down, dark navy and gunmetal grey, warm yellow lights and cyan magenta neon accents, black outline, medium shading, no shadow". There were 8 items per prop. Each prop was re-centred by an integer shift.
+
+| path | frame | notes |
+|---|---|---|
+| decor/city_ac.png | 0 | Four AC units with fans. |
+| decor/city_watertower.png | 12 | A brown wooden tower in a slight 3/4 view, brightened 30% in PIL because it disappeared on the roof tile. |
+| decor/city_helipad.png | 17 | A dark pad with a white H, a yellow ring and corner lights. |
+| decor/city_antenna.png | 24 | A lattice mast with a red light. The guy wires are separate 1-5px fragments, kept on purpose. This is the weakest read. |
+| decor/city_neon.png | 33 | A cyan cocktail-glass neon sign with a magenta accent. |
+| decor/city_skylight.png | 43 | A four-pane skylight with warm yellow light. |
+| decor/city_dishes.png | 48 | Two white dishes on a grey platform. |
+| decor/city_garden.png | 56 | Planters with a small greenhouse. |
+
+Lessons: (1) With an img2img layout sketch, strength ~60 is the sweet spot for adding real detail while keeping the layout. Above ~100 the output only traces a flat sketch. (2) Inpaint accepts `image_url` = the pixflux job's download URL, which avoids pasting large base64. When post-processing changes the image, inpaint the raw output and paste only the mask box back with the same offset. (3) The 1-direction grid accepts mixed item types in one 64-grid, which gave the heli, hatch, rail car and locomotive candidates for 20 generations. Rail cars come out at about 18x31, so non-square sprites need row stretching.

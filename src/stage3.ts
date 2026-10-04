@@ -1,6 +1,6 @@
 // Stage 3: the arctic. Over the polar sea and its floes, across the pack ice and the snowfield,
 // over the naval base and out to the anchorage, where the battleship lies.
-import { Stage, Wave, dive, sweep, swoop, gun, cargo, tanks, pillbox, battery, scramble, heavy, swarm, ship, both } from './stage';
+import { Stage, Wave, dive, sweep, swoop, gun, cargo, tanks, pillbox, battery, scramble, heavy, swarm, ship, chopper, loops, cross, hatch, both } from './stage';
 import { COLS, TILE, noise } from './terrain';
 import { BATTLESHIP } from './boss';
 import { ENEMIES } from './enemies';
@@ -93,6 +93,12 @@ const WAVES: Wave[] = [
   { at: 4260, run: swarm(120, 10, 40) },
   { at: 4340, run: ship(120, 0.2) },
   { at: 4420, run: cargo(120, 'bomb') },
+  // More variety: helicopters, aerobatics, hatches.
+  { at: 420, run: loops(180, 4, 110) },
+  { at: 1380, run: chopper(40, 90) },
+  { at: 2220, run: both(chopper(200, 70), cross(2)) },
+  { at: 3300, run: hatch(60, 180) },
+  { at: 3700, run: loops(60, 5, 130) },
 ];
 
 export const STAGE3: Stage = {
@@ -109,7 +115,7 @@ export const STAGE3: Stage = {
     ],
     water: true,
     profile,
-    decor: { level: Level.Base, props: 'decor/arctic_', density: 22, markings: true },
+    decor: { level: Level.Base, props: 'decor/arctic_', density: 13, markings: true },
   },
   boss: BATTLESHIP,
   key: -2,

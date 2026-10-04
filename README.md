@@ -4,7 +4,7 @@ A vertical-scrolling shooter in the style of the early nineties arcade, built in
 
 **Play:** https://gh.tschieber.de/vektor/
 
-Fly north. Stage 1 crosses the open sea, the beach, a jungle river and an enemy base, where a flying fortress waits. Stage 2 crosses the desert: dunes, the canyons of the mesas and a refinery, guarded by a crawler on tracks. Stage 3 goes north: the polar sea, the pack ice, a snowfield and a naval base, out to the anchorage where a battleship lies. Beat all three and it all starts again, faster. You have 3 ships, and one more at 200000 and at 500000 points.
+Fly north. Stage 1 crosses the open sea, the beach, a jungle river and an enemy base, where a flying fortress waits. Stage 2 crosses the desert: dunes, the canyons of the mesas and a refinery, guarded by a crawler on tracks. Stage 3 goes north: the polar sea, the pack ice, a snowfield and a naval base, out to the anchorage where a battleship lies. Stage 4 is a ruined city at night: the outskirts, downtown, a river, a power plant and the boulevard, where a walking mech comes stomping. Beat all four and it all starts again, faster. You have 3 ships, and one more at 200000 and at 500000 points.
 
 ## Weapons and items
 
@@ -22,9 +22,9 @@ A bomb clears every bullet on screen, hurts everything in sight and keeps you sa
 
 ## The stages
 
-Fighters dive, sweep and swoop in formation; gunships hover and fire spreads; tanks roll along the ground with turrets that follow you; bunkers sit in the jungle and the base. In the desert, interceptors come up from behind you, turn and fire; bombers lumber down the screen firing rings; artillery guns on the mesas swing round slowly and lob heavy shells, and tanks follow the canyon floor. In the arctic, destroyers sail the open water with two guns each, and drones fly in as a ring, circle, then break off one by one and dart at you.
+Fighters dive, sweep and swoop in formation; gunships hover and fire spreads; tanks roll along the ground with turrets that follow you; bunkers sit in the jungle and the base. In the desert, interceptors come up from behind you, turn and fire; bombers lumber down the screen firing rings; artillery guns on the mesas swing round slowly and lob heavy shells, and tanks follow the canyon floor. In the arctic, destroyers sail the open water with two guns each, and drones fly in as a ring, circle, then break off one by one and dart at you. In the city, helicopters drop in and strafe, armoured trains with gun cars run down the railway, and turrets hide in hatches on the rooftops: they can only be hurt while open.
 
-The fortress at the end of stage 1 has two cannon pods; the crawler at the end of stage 2 and the battleship at the end of stage 3 have four gun turrets each. When the guns are gone the core opens, and when the core is half gone it starts to spin.
+The fortress at the end of stage 1 has two cannon pods; the crawler at the end of stage 2 and the battleship at the end of stage 3 have four gun turrets each; the walker at the end of stage 4 has two shoulder cannons, and legs that send out a ring of shells every time a foot comes down. When the guns are gone the core opens, and when the core is half gone it starts to spin.
 
 Stage clear pays a no-miss bonus and 3000 for every bomb you didn't use.
 

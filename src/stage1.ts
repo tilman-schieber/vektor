@@ -1,6 +1,6 @@
 // Stage 1: over the ocean, across the beach, up a jungle river, into the base. The flying
 // fortress waits at the end.
-import { Stage, Wave, dive, sweep, swoop, gun, cargo, tanks, pillbox, both } from './stage';
+import { Stage, Wave, dive, sweep, swoop, gun, cargo, tanks, pillbox, chopper, loops, cross, hatch, both } from './stage';
 import { COLS, noise } from './terrain';
 import { FORTRESS } from './boss';
 import { W } from './draw';
@@ -87,6 +87,14 @@ const WAVES: Wave[] = [
   { at: 4140, run: both(gun(70, 70), gun(170, 70)) },
   { at: 4300, run: both(swoop(80, 150), swoop(160, 150)) },
   { at: 4400, run: cargo(120, 'bomb') },
+  // More variety: helicopters, aerobatics, hatches.
+  { at: 560, run: loops(60, 4, 110) },
+  { at: 1120, run: chopper(200, 90) },
+  { at: 1940, run: both(chopper(40, 70), chopper(200, 100)) },
+  { at: 2340, run: cross(3) },
+  { at: 3060, run: loops(180, 4, 130) },
+  { at: 3640, run: hatch(40, 200) },
+  { at: 4220, run: chopper(120, 80, 'medal') },
 ];
 
 export const STAGE1: Stage = {

@@ -51,7 +51,8 @@ const loopShots = (w: World) => (w.loop > 1 ? 1 : 0);
 /**
  * Small fighter. p[0] picks the flight path:
  * 0 dive straight down, curving toward the player; 1 sweep across from the side (p[1] = row);
- * 2 swoop: dive to p[1], turn and climb away.
+ * 2 swoop: dive to p[1], turn and climb away; 3 loop the loop at row p[1]; 4 cross diagonally.
+ * p[2] delays its one aimed shot.
  */
 const fighter: EnemyDef = {
   name: 'fighter',
@@ -69,11 +70,30 @@ const fighter: EnemyDef = {
     } else if (path === 1) {
       if (e.t === 0) e.vx = e.x < W / 2 ? 2.2 : -2.2;
       e.vy = Math.cos(e.t / 14) * 0.9 + (row - e.y) * 0.02;
-    } else {
+    } else if (path === 2) {
       if (e.t === 0) e.vy = 3.2;
       if (e.y > row || e.vy < 3) e.vy -= 0.1;
       e.vy = Math.max(-3.2, e.vy);
       e.vx += Math.sign(W / 2 - e.x) * 0.03 * (e.vy < 0 ? 1 : 0);
+    } else if (path === 3) {
+      // Loop the loop: down to the row, once round a circle turning away from the near edge, then
+      // on down. p[3] is how far it has turned, p[4] which way.
+      const side = (e.p[4] ??= e.x < W / 2 ? 1 : -1);
+      const before = e.p[3] ?? 0;
+      if ((e.y >= row || before > 0) && before < Math.PI * 2) {
+        e.p[3] = Math.min(Math.PI * 2, before + 0.075);
+        // Its shot comes at the top of the loop, upside down.
+        if (before < Math.PI && e.p[3] >= Math.PI) aimed(w, e.x, e.y, 1 + loopShots(w) * 2, 0.25, 2.2);
+      }
+      const a = (e.p[3] ?? 0) * side;
+      e.vx = Math.sin(a) * 2.4;
+      e.vy = Math.cos(a) * 2.4;
+    } else {
+      // Crossing: straight across on a diagonal from a top corner.
+      if (e.t === 0) {
+        e.vx = e.x < W / 2 ? 1.7 : -1.7;
+        e.vy = 1.7;
+      }
     }
     if (e.t === 36 + (e.p[2] ?? 0)) aimed(w, e.x, e.y, 1 + loopShots(w) * 2, 0.25, 2.2);
   },
@@ -269,6 +289,87 @@ const drone: EnemyDef = {
   },
 };
 
+/**
+ * Helicopter: drops in to row p[0], then strafes across the screen in direction p[1],
+ * firing single aimed shots as it goes.
+ */
+const heli: EnemyDef = {
+  name: 'heli',
+  sprite: 'enemies/heli',
+  hp: 10,
+  score: 600,
+  r: 12,
+  ground: false,
+  update(e, w) {
+    const row = e.p[0] ?? 80;
+    const dir = e.p[1] ?? 1;
+    if (e.t < 60) {
+      e.vy = Math.max(0.2, (row - e.y) * 0.05);
+      e.vx = 0;
+    } else {
+      e.vy = Math.sin(e.t / 20) * 0.3;
+      e.vx = Math.min(1.3, (e.t - 60) * 0.03) * dir;
+      if (e.t % 26 === 0) aimed(w, e.x, e.y + 10, 1 + loopShots(w), 0.2, 2.4);
+    }
+  },
+};
+
+/** Frames a pop-up turret's cycle lasts, and when within it the hatch is open. */
+export const POPUP_CYCLE = 160;
+export const popupOpen = (e: Enemy) => {
+  const k = (e.t + (e.p[0] ?? 0)) % POPUP_CYCLE;
+  return k >= 70 && k < 140;
+};
+
+/** Pop-up turret: an armoured hatch in a rooftop. Opens, fires a ring and an aimed burst, closes. */
+const popup: EnemyDef = {
+  name: 'popup',
+  sprite: 'enemies/popup_closed',
+  hp: 14,
+  score: 800,
+  r: 10,
+  ground: true,
+  update(e, w) {
+    e.vx = 0;
+    e.vy = w.scroll;
+    e.armored = !popupOpen(e);
+    if (e.y < 20) return;
+    const k = (e.t + (e.p[0] ?? 0)) % POPUP_CYCLE;
+    if (k === 90) ring(w, e.x, e.y, 8 + loopShots(w) * 4, 1.4, e.t / 30);
+    if (k === 115) aimed(w, e.x, e.y, 3, 0.2, 2.2);
+  },
+};
+
+/** An armoured train runs down the rails at x: the engine, then gun cars, all at speed p[0]. */
+const trainEngine: EnemyDef = {
+  name: 'trainEngine',
+  sprite: 'enemies/train_engine',
+  hp: 30,
+  score: 1500,
+  r: 12,
+  ground: true,
+  big: true,
+  update(e, w) {
+    e.vx = 0;
+    e.vy = w.scroll + (e.p[0] ?? 0.4);
+  },
+};
+
+const trainCar: EnemyDef = {
+  name: 'trainCar',
+  sprite: 'enemies/train_car',
+  hp: 18,
+  score: 800,
+  r: 12,
+  ground: true,
+  update(e, w) {
+    e.vx = 0;
+    e.vy = w.scroll + (e.p[0] ?? 0.4);
+    turn(e, aimAt(w, e.x, e.y), 0.05);
+    if (e.y > 16 && (e.t + (e.p[1] ?? 0) * 30) % 90 === 0) fan(w, e.x + Math.sin(e.aim) * 9, e.y + Math.cos(e.aim) * 9, e.aim, 1 + loopShots(w), 0.2, 2.0);
+  },
+};
+
 /** A piece of a boss: positioned by the boss, never moves by itself. */
 const part: EnemyDef = {
   name: 'part',
@@ -292,7 +393,7 @@ function turn(e: Enemy, want: number, rate: number) {
   e.aim += Math.max(-rate, Math.min(rate, d));
 }
 
-export const ENEMIES = { fighter, gunship, carrier, tank, bunker, interceptor, bomber, artillery, destroyer, drone, part, groundPart };
+export const ENEMIES = { fighter, gunship, carrier, tank, bunker, interceptor, bomber, artillery, destroyer, drone, heli, popup, trainEngine, trainCar, part, groundPart };
 export type EnemyName = keyof typeof ENEMIES;
 
 export function makeEnemy(def: EnemyDef, x: number, y: number, p: number[] = []): Enemy {

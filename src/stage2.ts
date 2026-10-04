@@ -1,6 +1,6 @@
 // Stage 2: across the dunes, through the canyons of the mesas, over the refinery. The desert
 // crawler waits at the end.
-import { Stage, Wave, dive, sweep, swoop, gun, cargo, tanks, pillbox, battery, scramble, heavy, both } from './stage';
+import { Stage, Wave, dive, sweep, swoop, gun, cargo, tanks, pillbox, battery, scramble, heavy, chopper, loops, cross, hatch, both } from './stage';
 import { COLS, TILE, noise } from './terrain';
 import { CRAWLER } from './boss';
 import { ENEMIES } from './enemies';
@@ -85,6 +85,13 @@ const WAVES: Wave[] = [
   { at: 4100, run: both(pillbox(40), battery(120), pillbox(200)) },
   { at: 4220, run: both(heavy(60), heavy(180)) },
   { at: 4400, run: cargo(120, 'bomb') },
+  // More variety: helicopters, aerobatics, hatches.
+  { at: 360, run: cross(2) },
+  { at: 1300, run: chopper(200, 80) },
+  { at: 2240, run: loops(120, 5, 120) },
+  { at: 3000, run: both(chopper(40, 70), chopper(200, 100)) },
+  { at: 3540, run: hatch(60, 180) },
+  { at: 4300, run: cross(3) },
 ];
 
 export const STAGE2: Stage = {
