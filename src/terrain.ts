@@ -2,6 +2,7 @@
 // drawn with Wang tiles that pick their picture from their four corners.
 import { W, H, hash } from './draw';
 import { drawWangTile } from './tiles';
+import { named, spr } from './sprites';
 
 export const TILE = 16;
 export const COLS = W / TILE;
@@ -29,6 +30,18 @@ export interface Ground {
   water: boolean;
   /** Terrain level at corner (x, row) before smoothing; row 0 is the start, at the bottom. */
   profile(seed: number, x: number, j: number): number;
+  /** Dressing for the open ground of one level: painted markings and props. */
+  decor?: Decor;
+}
+
+export interface Decor {
+  level: number;
+  /** Sprite name prefix of the props, e.g. 'decor/arctic_'. */
+  props: string;
+  /** Percent of free 2x2 spots that get a prop. */
+  density: number;
+  /** Dashed taxi lines and parking bays painted on the ground. */
+  markings: boolean;
 }
 
 export class Terrain {
@@ -85,10 +98,10 @@ export class Terrain {
       if (this.at(i, r) || this.at(i + 1, r) || this.at(i, r + 1) || this.at(i + 1, r + 1)) continue;
       const h = hash(r * 977 + i * 131);
       const period = 90 + (h & 63);
-      const phase = (frame + (h >> 8)) % period;
+      const phase = (frame + (h >>> 8)) % period;
       if (phase > 24) continue;
       const len = phase < 6 || phase > 18 ? 2 : 4;
-      const gx = i * TILE + ((h >> 16) % 10) + 1 + (phase >> 3), gy = y + ((h >> 20) % 12) + 2;
+      const gx = i * TILE + ((h >>> 16) % 10) + 1 + (phase >> 3), gy = y + ((h >>> 20) % 12) + 2;
       ctx.fillStyle = phase < 6 || phase > 18 ? '#5890e0' : '#a8d0f8';
       ctx.fillRect(gx, gy, len, 1);
       if (len === 4) ctx.fillRect(gx + 1, gy - 1, 2, 1);
@@ -107,8 +120,48 @@ export class Terrain {
       const nw = this.at(i, r + 1), ne = this.at(i + 1, r + 1), sw = this.at(i, r), se = this.at(i + 1, r);
       drawWangTile(g, this.ground, [nw, ne, sw, se], i * TILE, 0, hash(r * 64 + i));
     }
+    if (this.ground.decor) this.decorate(g, r, this.ground.decor);
     this.rows.set(r, c);
     return c;
+  }
+
+  /** Corners (x..x+n, j..j+n) all at `level`. */
+  private flat(x: number, j: number, n: number, level: number) {
+    for (let dj = 0; dj <= n; dj++) for (let dx = 0; dx <= n; dx++) if (x + dx > COLS || this.at(x + dx, j + dj) !== level) return false;
+    return true;
+  }
+
+  /** Paints markings onto row r's picture and puts down props on open ground. */
+  private decorate(g: CanvasRenderingContext2D, r: number, d: Decor) {
+    if (d.markings) {
+      for (let i = 0; i < COLS; i++) {
+        if (!this.flat(i, r, 1, d.level)) continue;
+        const x = i * TILE;
+        // Taxi lines: dashed yellow down every fifth column and across every ninth row.
+        g.fillStyle = '#c8a800';
+        if (i % 5 === 2) for (let py = 0; py < TILE; py++) if ((r * TILE + TILE - py) % 12 < 6) g.fillRect(x + 7, py, 2, 1);
+        if (r % 9 === 4) for (let px = 0; px < TILE; px += 6) g.fillRect(x + px, 7, 4, 2);
+        // Now and then a painted parking bay.
+        if (i % 5 !== 2 && hash(r * 977 + i * 31) % 29 === 0) {
+          g.fillStyle = 'rgba(220,224,228,0.3)';
+          g.fillRect(x + 2, 2, 12, 1);
+          g.fillRect(x + 2, 2, 1, 12);
+          g.fillRect(x + 13, 2, 1, 12);
+        }
+      }
+    }
+    const props = named(d.props);
+    if (!props.length) return;
+    // A prop covers 2x2 tiles from an even anchor; row r shows the anchor rows r and r-1.
+    for (const ra of [r, r - 1]) {
+      if (ra % 2) continue;
+      for (let i = 0; i < COLS - 1; i += 2) {
+        if (i % 5 === 2 || (i + 1) % 5 === 2) continue;
+        const h = hash(ra * 131 + i * 7 + 5);
+        if (h % 100 >= d.density || !this.flat(i, ra, 2, d.level)) continue;
+        g.drawImage(spr(props[(h >>> 8) % props.length]), i * TILE, (r - ra - 1) * TILE);
+      }
+    }
   }
 
   draw(ctx: CanvasRenderingContext2D, dist: number, frame: number) {

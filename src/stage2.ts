@@ -94,7 +94,7 @@ export const STAGE2: Stage = {
   ground: {
     sets: ['desert_rock', 'rock_metal'],
     colors: [
-      ['#d89850', '#e8b068', '#c08040'],
+      ['#e0bc80', '#ecd098', '#c8a268'],
       ['#6a4a30', '#7a5a3a', '#5a3c26'],
       ['#6a6a70', '#7a7a80', '#d8b800'],
     ],

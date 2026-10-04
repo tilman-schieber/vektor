@@ -5,6 +5,7 @@ import { ENEMIES, Enemy } from './enemies';
 import { aimed, aimAt, fan, ring, shoot, canFire } from './bullets';
 import { sfx } from './audio';
 import { W } from './draw';
+import { spr } from './sprites';
 
 export interface BossDef {
   sprite: string;
@@ -30,7 +31,7 @@ export interface BossDef {
 
 export class Boss {
   x = W / 2;
-  y = -60;
+  y: number;
   t = 0;
   phase: 0 | 1 | 2 | 3 = 0;
   /** Frames since death, or -1 while alive. */
@@ -44,6 +45,8 @@ export class Boss {
   coreMax: number;
 
   constructor(w: World, readonly def: BossDef) {
+    // Starts just above the screen, however tall it is.
+    this.y = -spr(def.sprite).height / 2 - 8;
     const part = def.ground ? ENEMIES.groundPart : ENEMIES.part;
     const tough = 1 + 0.3 * (w.loop - 1);
     this.podMax = def.podHp * tough;
@@ -260,18 +263,18 @@ export const BATTLESHIP: BossDef = {
   openSprite: 'boss/boss3_open',
   ground: true,
   pods: [
-    [0, 45],
-    [0, 27],
-    [0, -27],
-    [0, -47],
+    [0, 57],
+    [0, 30],
+    [0, -38],
+    [0, -65],
   ],
   turrets: true,
-  podHp: 85,
-  coreHp: 680,
-  coreY: 1,
-  bodyY: -40,
-  bodyR: 30,
-  hoverY: 104,
+  podHp: 95,
+  coreHp: 720,
+  coreY: -5,
+  bodyY: -52,
+  bodyR: 26,
+  hoverY: 98,
   act(b, w) {
     const c = b.core;
     b.x = W / 2 + Math.sin(b.t / 160) * 18;

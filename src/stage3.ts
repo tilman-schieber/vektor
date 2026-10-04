@@ -109,6 +109,7 @@ export const STAGE3: Stage = {
     ],
     water: true,
     profile,
+    decor: { level: Level.Base, props: 'decor/arctic_', density: 22, markings: true },
   },
   boss: BATTLESHIP,
   key: -2,

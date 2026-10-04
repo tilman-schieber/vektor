@@ -48,6 +48,9 @@ export async function loadSprites() {
 
 export const has = (name: string) => sprites.has(name);
 
+/** Names of the loaded sprites that start with `prefix`, sorted. */
+export const named = (prefix: string) => [...sprites.keys()].filter((n) => n.startsWith(prefix)).sort();
+
 // ---------- placeholders ----------
 
 const PLACEHOLDER: Record<string, [number, number, string, 'jet' | 'box' | 'disc']> = {

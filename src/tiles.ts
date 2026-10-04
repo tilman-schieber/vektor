@@ -66,6 +66,6 @@ export function drawWangTile(g: CanvasRenderingContext2D, ground: Ground, corner
   const name = `tiles/${ground.sets[set]}`;
   const options = lookup(ground.sets[set]).get(key);
   if (!has(name) || !options?.length) return fallback(g, ground.colors, corners, x, y, seed);
-  const [sx, sy] = options[(seed >> 3) % options.length];
+  const [sx, sy] = options[(seed >>> 3) % options.length];
   g.drawImage(spr(name), sx, sy, 16, 16, x, y, 16, 16);
 }
