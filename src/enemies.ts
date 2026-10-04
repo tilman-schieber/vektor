@@ -48,7 +48,8 @@ export interface EnemyDef {
   update(e: Enemy, w: World): void;
 }
 
-const loopShots = (w: World) => (w.loop > 1 ? 1 : 0);
+/** Extra shots in a volley: from stage 4 on, and on every later loop. */
+const loopShots = (w: World) => (w.loop > 1 || w.stageIdx >= 3 ? 1 : 0);
 
 /**
  * Small fighter. p[0] picks the flight path:

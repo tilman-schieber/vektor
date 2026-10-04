@@ -11,7 +11,7 @@ import { Rng } from './rng';
 
 export type Weapon = 'vulcan' | 'laser';
 export const MAX_LEVEL = 5;
-export const MAX_MISSILES = 4;
+export const MAX_MISSILES = 5;
 export const MAX_BOMBS = 7;
 /** Extra lives at these scores. */
 export const EXTENDS = [200000, 500000];
@@ -46,6 +46,8 @@ export interface Shot {
   hit?: Set<Enemy>;
   /** Laser width. */
   width?: number;
+  /** Weapon level it was fired at, for how it looks. */
+  level?: number;
   t: number;
   dead: boolean;
 }
@@ -118,7 +120,7 @@ export class World {
   stageIdx = 0;
   /** How many times round all the stages, from 1. */
   loop = 1;
-  /** Bullet speed multiplier: faster every loop. */
+  /** Bullet speed multiplier: faster every stage and every loop. */
   bulletSpeed = 1;
   state: WorldState = 'play';
   stateTimer = 0;
@@ -182,8 +184,15 @@ export class World {
     this.later.push({ at: this.frame + frames, fn });
   }
 
+  /** How much tougher enemies are on this stage: 12% more health per stage. */
+  get toughness() {
+    return 1 + 0.12 * this.stageIdx;
+  }
+
   spawn(def: EnemyDef, x: number, y: number, p: number[] = [], drop?: ItemKind) {
     const e = makeEnemy(def, x, y, p);
+    // One-hit enemies stay one-hit.
+    if (def.hp > 1) e.hp = def.hp * this.toughness;
     e.drop = drop;
     this.enemies.push(e);
     return e;
@@ -198,7 +207,8 @@ export class World {
   goTo(i: number) {
     this.loop += Math.floor(i / STAGES.length);
     this.stageIdx = i % STAGES.length;
-    this.bulletSpeed = 1 + 0.2 * (this.loop - 1);
+    // Bullets speed up 20% a loop, and 7% a stage within it.
+    this.bulletSpeed = (1 + 0.2 * (this.loop - 1)) * (1 + 0.07 * this.stageIdx);
     this.terrain = new Terrain(1234 + this.stageIdx * 77, this.stage.ground);
     this.dist = 0;
     this.warning = 0;
@@ -334,7 +344,8 @@ export class World {
   private fire() {
     const p = this.player;
     if (p.missiles > 0 && p.missileCooldown <= 0) {
-      p.missileCooldown = 36;
+      // A full rack of five also reloads faster.
+      p.missileCooldown = p.missiles >= MAX_MISSILES ? 28 : 36;
       for (let k = 0; k < p.missiles; k++) {
         const side = k % 2 ? 1 : -1;
         const x = p.x + side * (8 + (k >> 1) * 4);
@@ -352,13 +363,13 @@ export class World {
         const off = k - (n - 1) / 2;
         const a = n === 2 ? 0 : off * spread;
         const x = p.x + (n === 2 ? (k ? 4 : -4) : off * 2);
-        this.shots.push({ kind: 'vulcan', x, y: p.y - 12, vx: Math.sin(a) * 8, vy: -Math.cos(a) * 8, dmg: 1, t: 0, dead: false });
+        this.shots.push({ kind: 'vulcan', x, y: p.y - 12, vx: Math.sin(a) * 8, vy: -Math.cos(a) * 8, dmg: 1, level: p.level, t: 0, dead: false });
       }
       sfx.vulcan();
     } else {
       p.cooldown = 2;
       const width = 3 + p.level * 2;
-      this.shots.push({ kind: 'laser', x: p.x, y: p.y - 14, vx: 0, vy: -10, dmg: 0.6 + p.level * 0.3, hit: new Set(), width, t: 0, dead: false });
+      this.shots.push({ kind: 'laser', x: p.x, y: p.y - 14, vx: 0, vy: -10, dmg: 0.6 + p.level * 0.3, hit: new Set(), width, level: p.level, t: 0, dead: false });
       sfx.laser();
     }
   }
@@ -385,10 +396,11 @@ export class World {
     this.debris(p.x, p.y, 24, '#f8d838');
     this.shake = 20;
     sfx.die();
-    // What you had flies off for you to catch again.
-    if (p.level > 1 || p.missiles > 0) this.dropItem('weapon', p.x, p.y);
-    if (p.missiles > 0) this.dropItem('missile', p.x, p.y);
-    Object.assign(p, { level: 1, missiles: 0, bombs: Math.max(p.bombs, START_BOMBS) });
+    // A lost ship costs half your levels, rounded down but at least one: weapon and missiles alike.
+    const lose = (n: number) => Math.max(1, Math.floor(n / 2));
+    p.level = Math.max(1, p.level - lose(p.level));
+    p.missiles = Math.max(0, p.missiles - lose(p.missiles));
+    p.bombs = Math.max(p.bombs, START_BOMBS);
     this.bullets = [];
   }
 
@@ -551,17 +563,23 @@ export class World {
       return;
     }
     sfx.power();
+    // Say what it did, over the ship.
+    const said = (text: string) => this.popup(p.x, p.y - 22, text);
+    const lv = (n: number, max: number) => (n >= max ? 'MAX' : String(n));
     if (it.kind === 'weapon') {
       const face = World.weaponFace(it);
       if (face !== p.weapon) p.weapon = face;
       else if (p.level < MAX_LEVEL) p.level++;
-      else bonus('5000');
+      else return bonus('5000');
+      said(`${face === 'vulcan' ? 'VULCAN' : 'LASER'} ${lv(p.level, MAX_LEVEL)}`);
     } else if (it.kind === 'missile') {
       if (p.missiles < MAX_MISSILES) p.missiles++;
-      else bonus('5000');
+      else return bonus('5000');
+      said(`MISSILES ${lv(p.missiles, MAX_MISSILES)}`);
     } else if (it.kind === 'bomb') {
       if (p.bombs < MAX_BOMBS) p.bombs++;
-      else bonus('5000');
+      else return bonus('5000');
+      said('BOMB');
     }
   }
 

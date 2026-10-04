@@ -14,11 +14,11 @@ Carriers drop items when shot down. The weapon orb changes colour while it float
 | --- | --- |
 | V (red) | Vulcan: a spread that widens with every level, up to 5 |
 | L (blue) | Laser: a narrow beam that bends after the ship and goes through what it hits |
-| M (green) | Homing missiles, on top of either weapon, up to 4 |
+| M (green) | Homing missiles, on top of either weapon, up to 5; a full rack of five reloads faster |
 | B (yellow) | One more bomb, up to 7 |
 | Medal | Hidden in bunkers. Each is worth 500 more than the last, up to 10000; miss one and it is back to 500 |
 
-A bomb clears every bullet on screen, hurts everything in sight and keeps you safe while it burns. Losing a ship drops your power-ups for you to catch again, and you start the next one with 3 bombs.
+A bomb clears every bullet on screen, hurts everything in sight and keeps you safe while it burns. Losing a ship costs half your weapon levels and half your missiles, rounded down but at least one each (so level 5 drops to 3, level 2 to 1), and you start the next ship with at least 3 bombs.
 
 ## The stages
 

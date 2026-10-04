@@ -1,5 +1,5 @@
 import { Game, MENU, MUSIC_NAMES, NAME_LEN, CARD_FRAMES, TALLY_AT } from './game';
-import { World, Shot, Blast, Item, MAX_LEVEL } from './world';
+import { World, Shot, Blast, Item, MAX_LEVEL, MAX_MISSILES } from './world';
 import { Enemy, DESTROYER_GUNS, LAVABOAT_GUN, popupOpen, magmaRise, siloOpen } from './enemies';
 import { aimAt } from './bullets';
 import { Boss } from './boss';
@@ -95,23 +95,52 @@ function drawGroundEnemy(ctx: Ctx, e: Enemy, w: World, frame: number) {
   if (e.def.name === 'artillery') drawAt(ctx, rotated('enemies/artillery_barrel', stepFor(Math.sin(e.aim), Math.cos(e.aim))), e.x, e.y);
 }
 
+/** Laser colours per level: outer, body, core. Level 5 turns to violet plasma. */
+const LASER = [
+  ['#0040b8', '#2878f8', '#a8d8fc'],
+  ['#0058f8', '#3cbcfc', '#d8f0fc'],
+  ['#0078f8', '#58d8fc', '#fcfcfc'],
+  ['#00a0f8', '#80ecfc', '#fcfcfc'],
+  ['#7038f8', '#c090fc', '#fcfcfc'],
+];
+
 function drawShot(ctx: Ctx, s: Shot, frame: number) {
   const x = Math.round(s.x), y = Math.round(s.y);
+  const lv = s.level ?? 1;
   if (s.kind === 'vulcan') {
-    ctx.fillStyle = '#f87800';
-    ctx.fillRect(x - 1, y - 3, 3, 7);
-    ctx.fillStyle = '#fcfc80';
-    ctx.fillRect(x, y - 3, 1, 6);
+    // Bigger and hotter with each level.
+    const h = lv >= 5 ? 10 : lv >= 3 ? 9 : 7;
+    const w = lv >= 5 ? 4 : 3;
+    if (lv >= 3) {
+      ctx.fillStyle = 'rgba(248,120,0,0.45)';
+      ctx.fillRect(x - Math.floor(w / 2) - 1, y - 4, w + 2, h + 1);
+    }
+    ctx.fillStyle = lv >= 5 ? '#f8b800' : '#f87800';
+    ctx.fillRect(x - Math.floor(w / 2), y - 3, w, h);
+    ctx.fillStyle = lv >= 5 ? '#fcfcfc' : '#fcfc80';
+    ctx.fillRect(x - (lv >= 5 ? 1 : 0), y - 3, lv >= 5 ? 2 : 1, h - 1);
   } else if (s.kind === 'laser') {
     const wd = s.width!;
-    const pulse = (frame >> 1) % 2;
-    ctx.fillStyle = '#0058f8';
-    ctx.fillRect(x - Math.floor(wd / 2), y - 11, wd, 22);
-    ctx.fillStyle = BLUE;
-    ctx.fillRect(x - Math.floor(wd / 2) + 1, y - 11, Math.max(1, wd - 2), 22);
-    ctx.fillStyle = WHITE;
-    const core = Math.max(1, Math.floor(wd / 3) - pulse);
-    ctx.fillRect(x - Math.floor(core / 2), y - 11, core, 22);
+    const [outer, body, core] = LASER[lv - 1];
+    // Level 5 ripples like plasma.
+    const wob = lv >= 5 ? Math.round(Math.sin((s.y + frame * 3) / 5) * 1.5) : 0;
+    const left = x - Math.floor(wd / 2) + wob;
+    if (lv >= 2) {
+      ctx.fillStyle = lv >= 5 ? 'rgba(160,96,248,0.3)' : 'rgba(60,188,252,0.25)';
+      ctx.fillRect(left - 2, y - 11, wd + 4, 22);
+    }
+    ctx.fillStyle = outer;
+    ctx.fillRect(left, y - 11, wd, 22);
+    ctx.fillStyle = body;
+    ctx.fillRect(left + 1, y - 11, Math.max(1, wd - 2), 22);
+    ctx.fillStyle = core;
+    const c = Math.max(1, Math.floor(wd / 3) - ((frame >> 1) % 2));
+    ctx.fillRect(x + wob - Math.floor(c / 2), y - 11, c, 22);
+    // Sparks crackle along the beam from level 3.
+    if (lv >= 3 && (frame + s.t) % 5 === 0) {
+      ctx.fillStyle = '#fcfcfc';
+      ctx.fillRect(left + ((s.t * 7 + frame) % wd), y - 11 + ((s.t * 13) % 22), 1, 1);
+    }
   } else {
     // A missile: body along its heading, flame behind.
     const len = Math.hypot(s.vx, s.vy) || 1;
@@ -371,10 +400,7 @@ function drawHud(ctx: Ctx, game: Game, w: World, frame: number) {
     ctx.fillStyle = '#000';
     ctx.fillRect(x + 2, y + 1, 1, 3);
   }
-  // Weapon and power, bottom centre.
-  const p = w.player;
-  const label = `${p.weapon === 'vulcan' ? 'V' : 'L'}${p.level === MAX_LEVEL ? 'MAX' : p.level}${p.missiles ? ` M${p.missiles}` : ''}`;
-  drawTextShadow(ctx, label, Math.round(W / 2 - textWidth(label) / 2), H - 11, p.weapon === 'vulcan' ? '#f87858' : BLUE);
+  drawStatus(ctx, w, frame);
 
   if (w.boss && w.boss.dying < 0 && w.boss.phase > 0) {
     // Boss health: the pods, then the core.
@@ -388,6 +414,34 @@ function drawHud(ctx: Ctx, game: Game, w: World, frame: number) {
     ctx.fillStyle = b.open ? ((frame >> 2) % 2 ? RED : '#f87800') : YELLOW;
     ctx.fillRect(40, 15, Math.ceil(160 * Math.max(0, left)), 3);
   }
+}
+
+/**
+ * The weapon in a box (V red, L blue) with a pip per level, then the missiles' pips.
+ * Full rows blink to say MAX.
+ */
+function drawStatus(ctx: Ctx, w: World, frame: number) {
+  const p = w.player;
+  const vulcan = p.weapon === 'vulcan';
+  const color = vulcan ? '#f85838' : BLUE;
+  const x0 = Math.round(W / 2 - 40), y = H - 12;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(x0 - 1, y - 1, 81, 10);
+  ctx.fillStyle = color;
+  ctx.fillRect(x0, y, 9, 8);
+  drawText(ctx, vulcan ? 'V' : 'L', x0 + 2, y + 1 - 0, '#000');
+  const pips = (x: number, n: number, max: number, on: string, wd: number) => {
+    const full = n >= max && (frame >> 4) % 2 === 0;
+    for (let k = 0; k < max; k++) {
+      ctx.fillStyle = k < n ? (full ? WHITE : on) : '#383838';
+      ctx.fillRect(x + k * (wd + 1), y + 2, wd, 4);
+    }
+  };
+  pips(x0 + 11, p.level, MAX_LEVEL, color, 5);
+  ctx.fillStyle = '#58d854';
+  ctx.fillRect(x0 + 44, y, 7, 8);
+  drawText(ctx, 'M', x0 + 45, y + 1, '#000');
+  pips(x0 + 53, p.missiles, MAX_MISSILES, '#58d854', 4);
 }
 
 const MINI = ['..#..', '..#..', '.###.', '#####', '#.#.#', '..#..'];

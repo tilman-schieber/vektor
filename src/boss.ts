@@ -60,7 +60,7 @@ export class Boss {
     // Starts just above the screen, however tall it is.
     this.y = -spr(def.sprite).height / 2 - 8;
     const part = def.ground ? ENEMIES.groundPart : ENEMIES.part;
-    const tough = 1 + 0.3 * (w.loop - 1);
+    const tough = (1 + 0.3 * (w.loop - 1)) * w.toughness;
     this.podMax = def.podHp * tough;
     this.coreMax = def.coreHp * tough;
     this.pods = def.pods.map(([dx, dy], i) => {

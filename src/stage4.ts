@@ -127,7 +127,7 @@ const WAVES: Wave[] = [
   { at: 2760, run: both(hatches(140, 200), swarm(120, 8)) },
   { at: 2900, run: both(heavy(100), heavy(190)) },
   { at: 3040, run: both(chopper(30, 70), chopper(210, 100), sweep(false, 120, 6)) },
-  { at: 3180, run: cargo(120, 'missile') },
+  { at: 3180, run: cargo(120, 'medal') },
   { at: 3260, run: train(6, 0.6) },
   { at: 3400, run: both(hatches(120, 170, 220), scramble(4, 60)) },
   { at: 3560, run: both(gun(70, 60), gun(180, 80)) },
