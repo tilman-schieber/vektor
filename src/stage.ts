@@ -23,7 +23,7 @@ export interface Stage {
 }
 
 type Run = (w: World) => void;
-const { fighter, gunship, carrier, tank, bunker, interceptor, bomber, artillery } = ENEMIES;
+const { fighter, gunship, carrier, tank, bunker, interceptor, bomber, artillery, destroyer, drone } = ENEMIES;
 
 /** n fighters diving one after another down column x. */
 export const dive = (x: number, n = 5, gap = 12): Run => (w) => {
@@ -65,5 +65,16 @@ export const scramble = (n = 3, turn = 70): Run => (w) => {
 };
 
 export const heavy = (x: number, drop?: ItemKind): Run => (w) => void w.spawn(bomber, x, -36, [], drop);
+
+/** A ring of n drones that flies in around (cx, top), circles, then breaks off one by one. */
+export const swarm = (cx: number, n = 8, radius = 30): Run => (w) => {
+  for (let k = 0; k < n; k++) {
+    const a = (k / n) * Math.PI * 2;
+    w.spawn(drone, cx + Math.cos(a) * radius, -40 + Math.sin(a) * radius, [cx, -40, a, radius, 170 + k * 10]);
+  }
+};
+
+/** A destroyer coming down column x, sailing up at `speed` (so slower than the ground) and drifting by vx. */
+export const ship = (x: number, speed = 0.25, vx = 0): Run => (w) => void w.spawn(destroyer, x, -34, [speed, vx]);
 
 export const both = (...fns: Run[]): Run => (w) => fns.forEach((f) => f(w));

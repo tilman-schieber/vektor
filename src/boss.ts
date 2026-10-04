@@ -252,3 +252,49 @@ export const CRAWLER: BossDef = {
     }
   },
 };
+
+// ---------- stage 3: the battleship ----------
+
+export const BATTLESHIP: BossDef = {
+  sprite: 'boss/boss3',
+  openSprite: 'boss/boss3_open',
+  ground: true,
+  pods: [
+    [0, 45],
+    [0, 27],
+    [0, -27],
+    [0, -47],
+  ],
+  turrets: true,
+  podHp: 85,
+  coreHp: 680,
+  coreY: 1,
+  bodyY: -40,
+  bodyR: 30,
+  hoverY: 104,
+  act(b, w) {
+    const c = b.core;
+    b.x = W / 2 + Math.sin(b.t / 160) * 18;
+    if (b.phase === 1) {
+      b.pods.forEach((pod, i) => {
+        if (pod.dead) return;
+        if ((b.t + i * 27) % 110 === 0) fan(w, pod.x + Math.sin(pod.aim) * 10, pod.y + Math.cos(pod.aim) * 10, pod.aim, 3, 0.12, 2.0);
+      });
+      // Broadsides from both beams.
+      if (b.t % 260 === 200) {
+        fan(w, b.x - 20, b.y, 0.8, 5, 0.15, 1.5, true);
+        fan(w, b.x + 20, b.y, -0.8, 5, 0.15, 1.5, true);
+      }
+    } else if (b.phase === 2) {
+      if (b.t % 40 === 0) aimed(w, c.x, c.y + 12, 3, 0.16, 2.2);
+      if (b.t % 90 === 60) ring(w, c.x, c.y, 16 + w.loop * 2, 1.3, b.t / 45);
+    } else {
+      // A flower of rings, each turned a little further.
+      if (b.t % 18 === 0) {
+        b.spin += 0.13;
+        ring(w, c.x, c.y, 10, 1.25, b.spin);
+      }
+      if (b.t % 70 === 35) aimed(w, c.x, c.y + 12, 1, 0, 2.6, true);
+    }
+  },
+};

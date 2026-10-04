@@ -41,6 +41,8 @@ export interface EnemyDef {
   ground: boolean;
   /** Big ones get a big explosion. */
   big?: boolean;
+  /** On water: goes down without leaving a wreck. */
+  sinks?: boolean;
   update(e: Enemy, w: World): void;
 }
 
@@ -212,6 +214,61 @@ const artillery: EnemyDef = {
   },
 };
 
+/** Where a destroyer's two gun turrets sit, from its centre. */
+export const DESTROYER_GUNS = [-14, 14];
+
+/**
+ * Destroyer: sails the open water (p[0] its own speed up the screen, p[1] sideways) and fires
+ * from its two turrets in turn.
+ */
+const destroyer: EnemyDef = {
+  name: 'destroyer',
+  sprite: 'enemies/destroyer',
+  hp: 40,
+  score: 2500,
+  r: 16,
+  ground: true,
+  big: true,
+  sinks: true,
+  update(e, w) {
+    e.vx = e.p[1] ?? 0;
+    e.vy = w.scroll - (e.p[0] ?? 0.25);
+    turn(e, aimAt(w, e.x, e.y), 0.04);
+    if (e.y < 10) return;
+    const k = e.t % 70;
+    if (k === 0 || k === 35) {
+      const gy = e.y + DESTROYER_GUNS[k ? 1 : 0];
+      fan(w, e.x + Math.sin(e.aim) * 8, gy + Math.cos(e.aim) * 8, aimAt(w, e.x, gy), 1 + loopShots(w), 0.2, 2.0);
+    }
+  },
+};
+
+/**
+ * Drone: flies in as one of a ring around (p[0], p[1]) at angle p[2] and radius p[3], circles,
+ * and at frame p[4] breaks off and darts at where the player is.
+ */
+const drone: EnemyDef = {
+  name: 'drone',
+  sprite: 'enemies/drone',
+  hp: 1,
+  score: 150,
+  r: 6,
+  ground: false,
+  update(e, w) {
+    const [cx, cy0, a0, radius, leave] = e.p;
+    if (e.t < leave) {
+      const cy = cy0 + Math.min(e.t, 70) * 1.6;
+      const a = a0 + e.t * 0.05;
+      e.vx = cx + Math.cos(a) * radius - e.x;
+      e.vy = cy + Math.sin(a) * radius - e.y;
+    } else if (e.t === leave) {
+      const d = Math.hypot(w.player.x - e.x, w.player.y - e.y) || 1;
+      e.vx = ((w.player.x - e.x) / d) * 3;
+      e.vy = ((w.player.y - e.y) / d) * 3;
+    }
+  },
+};
+
 /** A piece of a boss: positioned by the boss, never moves by itself. */
 const part: EnemyDef = {
   name: 'part',
@@ -235,7 +292,7 @@ function turn(e: Enemy, want: number, rate: number) {
   e.aim += Math.max(-rate, Math.min(rate, d));
 }
 
-export const ENEMIES = { fighter, gunship, carrier, tank, bunker, interceptor, bomber, artillery, part, groundPart };
+export const ENEMIES = { fighter, gunship, carrier, tank, bunker, interceptor, bomber, artillery, destroyer, drone, part, groundPart };
 export type EnemyName = keyof typeof ENEMIES;
 
 export function makeEnemy(def: EnemyDef, x: number, y: number, p: number[] = []): Enemy {

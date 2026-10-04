@@ -1,6 +1,7 @@
 import { Game, MENU, MUSIC_NAMES, NAME_LEN, CARD_FRAMES, TALLY_AT } from './game';
 import { World, Shot, Blast, Item, MAX_LEVEL } from './world';
-import { Enemy } from './enemies';
+import { Enemy, DESTROYER_GUNS } from './enemies';
+import { aimAt } from './bullets';
 import { Boss } from './boss';
 import { STAGES } from './stages';
 import { Terrain } from './terrain';
@@ -30,7 +31,29 @@ function enemySprite(e: Enemy) {
   return spr(name);
 }
 
-function drawGroundEnemy(ctx: Ctx, e: Enemy, w: World) {
+/** A gun barrel drawn in code, from (x, y) toward `aim`. */
+function drawBarrel(ctx: Ctx, x: number, y: number, aim: number, len = 12) {
+  const dx = Math.sin(aim), dy = Math.cos(aim);
+  // Black outline first, then a steel core, so it reads on dark turrets and light ground alike.
+  ctx.fillStyle = '#000';
+  for (let k = 3; k <= len; k++) ctx.fillRect(Math.round(x + dx * k) - 1, Math.round(y + dy * k) - 1, 3, 3);
+  for (let k = 3; k < len; k++) {
+    ctx.fillStyle = k > len - 3 ? '#585858' : '#a8acb4';
+    ctx.fillRect(Math.round(x + dx * k), Math.round(y + dy * k), 1, 1);
+  }
+}
+
+function drawGroundEnemy(ctx: Ctx, e: Enemy, w: World, frame: number) {
+  if (e.def.name === 'destroyer') {
+    // Foam churned up astern.
+    for (let k = 0; k < 6; k++) {
+      ctx.fillStyle = (frame + k * 3) % 8 < 4 ? WHITE : '#a8d0f8';
+      ctx.fillRect(Math.round(e.x) - 3 + ((k * 5 + (frame >> 3)) % 7), Math.round(e.y) - 34 - (k % 3) * 2, 2, 1);
+    }
+    drawAt(ctx, enemySprite(e), e.x, e.y);
+    for (const gy of DESTROYER_GUNS) drawBarrel(ctx, e.x, e.y + gy, aimAt(w, e.x, e.y + gy), 10);
+    return;
+  }
   if (e.def.name === 'tank') {
     // Hull faces the way it rolls over the ground; the turret tracks the player.
     const step = stepFor(e.vx, e.vy - w.scroll || 0.01);
@@ -144,14 +167,7 @@ function drawBoss(ctx: Ctx, b: Boss, frame: number) {
       // Wrecked pods smoke and burn.
       disc(ctx, x, y, 8, '#202020');
       disc(ctx, x + ((frame >> 2) % 3) - 1, y - 2, 3 + (frame % 3), frame % 4 < 2 ? '#f87800' : '#f8d838');
-    } else if (b.def.turrets) {
-      // A gun barrel that follows the player.
-      const dx = Math.sin(pod.aim), dy = Math.cos(pod.aim);
-      for (let k = 3; k < 12; k++) {
-        ctx.fillStyle = k > 9 ? '#101010' : '#2a2a2a';
-        ctx.fillRect(Math.round(x + dx * k) - 1, Math.round(y + dy * k) - 1, 3, 3);
-      }
-    }
+    } else if (b.def.turrets) drawBarrel(ctx, x, y, pod.aim);
   });
   // The core glows once open, and pulses fast in a rage.
   if (b.open && b.dying < 0) {
@@ -166,7 +182,7 @@ function drawBoss(ctx: Ctx, b: Boss, frame: number) {
 function drawWorld(ctx: Ctx, w: World, frame: number) {
   w.terrain.draw(ctx, w.dist, w.frame);
   for (const wr of w.wrecks) drawAt(ctx, spr('enemies/wreck'), wr.x, wr.y);
-  for (const e of w.enemies) if (e.def.ground) drawGroundEnemy(ctx, e, w);
+  for (const e of w.enemies) if (e.def.ground) drawGroundEnemy(ctx, e, w, frame);
   for (const it of w.items) if (it.kind === 'medal') drawItem(ctx, it, frame);
   if (w.boss?.def.ground) drawBoss(ctx, w.boss, frame);
   for (const b of w.blasts) if (b.ground) drawBlast(ctx, b);

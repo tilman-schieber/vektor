@@ -466,7 +466,7 @@ export class World {
     if (e.def.name === 'part') return this.boss?.partDestroyed(this, e);
     this.blast(e.x, e.y, !!e.def.big, e.def.ground);
     this.debris(e.x, e.y, e.def.big ? 18 : 8, e.def.ground ? '#8a7050' : '#bcbcbc');
-    if (e.def.ground) this.wrecks.push({ x: e.x, y: e.y });
+    if (e.def.ground && !e.def.sinks) this.wrecks.push({ x: e.x, y: e.y });
     if (e.def.big) this.shake = Math.max(this.shake, 12);
     if (e.drop) this.dropItem(e.drop, e.x, e.y);
   }
@@ -623,6 +623,8 @@ export class World {
         const r = e.r ?? e.def.r;
         // Armour stops only what is really inside it; targets get a generous box.
         if (e.armored ? Math.hypot(e.x - s.x, e.y - s.y) > r : Math.abs(e.x - s.x) > r + half || Math.abs(e.y - s.y) > r + 6) continue;
+        // A boss's armour lets through a shot lined up with one of its live guns further on.
+        if (e.armored && this.boss?.parts.some((q) => !q.armored && !q.dead && q.y < s.y && Math.abs(q.x - s.x) < (q.r ?? q.def.r) + half)) continue;
         if (s.kind === 'laser') {
           if (s.hit!.has(e)) continue;
           s.hit!.add(e);
