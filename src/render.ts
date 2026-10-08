@@ -1,8 +1,8 @@
 import { Game, MENU, MUSIC_NAMES, NAME_LEN, CARD_FRAMES, TALLY_AT } from './game';
-import { World, Shot, Blast, Item, MAX_LEVEL, MAX_MISSILES, SHIELD_REGEN } from './world';
-import { Enemy, DESTROYER_GUNS, LAVABOAT_GUN, popupOpen, magmaRise, siloOpen } from './enemies';
+import { World, Shot, Blast, Item, MAX_LEVEL, MAX_MISSILES, SHIELD_REGEN, WARNING_FRAMES } from './world';
+import { Enemy, DESTROYER_GUNS, LAVABOAT_GUN, popupOpen, magmaRise, siloOpen, hangarOpen, GRAVITY_R, STEALTH_SHOW } from './enemies';
 import { aimAt } from './bullets';
-import { Boss } from './boss';
+import { Boss, walkerHead, LIGHT_SPREAD, BEAM_AIM, BEAM_LOCK, MORTAR_FUSE, MORTAR_R, CHARGE_FRAMES } from './boss';
 import { STAGES } from './stages';
 import { Terrain, TILE } from './terrain';
 import { MAX_SCORES } from './scores';
@@ -27,7 +27,9 @@ function drawShadow(ctx: Ctx, name: string, x: number, y: number, dist = 1) {
 function enemySprite(e: Enemy) {
   const name = e.def.sprite;
   if (e.flash > 0) return flash(name);
-  if (e.def.name === 'fighter' || e.def.name === 'interceptor' || e.def.name === 'rocket') return rotated(name, stepFor(e.vx, e.vy || 0.01));
+  if (e.def.name === 'fighter' || e.def.name === 'raider' || e.def.name === 'interceptor' || e.def.name === 'rocket') return rotated(name, stepFor(e.vx, e.vy || 0.01));
+  // Asteroids tumble, each its own way round.
+  if (e.def.name === 'asteroid') return rotated(name, Math.floor(e.t / 7) * ((e.p[0] ?? 0) < 0 ? -1 : 1));
   return spr(name);
 }
 
@@ -85,8 +87,9 @@ function drawGroundEnemy(ctx: Ctx, e: Enemy, w: World, frame: number) {
     drawBarrel(ctx, e.x, e.y + LAVABOAT_GUN, e.aim, 10);
     return;
   }
-  if (e.def.name === 'popup') {
-    const name = popupOpen(e) ? 'enemies/popup_open' : 'enemies/popup_closed';
+  if (e.def.name === 'popup' || e.def.name === 'hangar') {
+    const open = e.def.name === 'popup' ? popupOpen(e) : hangarOpen(e);
+    const name = `enemies/${e.def.name}_${open ? 'open' : 'closed'}`;
     drawAt(ctx, e.flash > 0 ? flash(name) : spr(name), e.x, e.y);
     return;
   }
@@ -217,11 +220,11 @@ function drawBullets(ctx: Ctx, w: World, frame: number) {
       continue;
     }
     if (b.hang !== undefined) {
-      // Needle: a steel dart pointing where it will go; it flickers just before it flies.
+      // Needle: a brass dart pointing where it will go; it glows red-hot just before it flies.
       const sx = Math.sin(b.ang!), sy = Math.cos(b.ang!);
       const hot = b.t >= b.hang || (b.hang - b.t < 12 && frame % 4 < 2);
       ctx.lineCap = 'round';
-      for (const [width, color] of [[4, '#000'], [2, hot ? '#f8f8f8' : '#58f8f8']] as const) {
+      for (const [width, color] of [[4, '#000'], [2, hot ? '#f85838' : '#e8b848']] as const) {
         ctx.strokeStyle = color;
         ctx.lineWidth = width;
         ctx.beginPath();
@@ -229,7 +232,20 @@ function drawBullets(ctx: Ctx, w: World, frame: number) {
         ctx.lineTo(b.x + sx * 4, b.y + sy * 4);
         ctx.stroke();
       }
-      disc(ctx, b.x + sx * 4, b.y + sy * 4, 1, hot ? '#58f8f8' : WHITE);
+      disc(ctx, b.x + sx * 4, b.y + sy * 4, 1, hot ? '#fcfcfc' : '#fce0a8');
+      continue;
+    }
+    if (b.burstN) {
+      // Dropped bomb: dark body with fins and a red light that blinks faster before it bursts.
+      const x = Math.round(b.x), y = Math.round(b.y);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(x - 3, y - 5, 7, 10);
+      ctx.fillStyle = '#585868';
+      ctx.fillRect(x - 2, y - 3, 5, 7);
+      ctx.fillRect(x - 3, y - 5, 7, 2);
+      const fast = b.t > b.burst! - 15;
+      ctx.fillStyle = (frame >> (fast ? 1 : 3)) % 2 ? RED : '#f8d838';
+      ctx.fillRect(x - 1, y + 1, 3, 3);
       continue;
     }
     if (b.burst !== undefined) {
@@ -315,6 +331,148 @@ function drawBoss(ctx: Ctx, b: Boss, frame: number) {
   }
 }
 
+/** A boss's searchlight and mortar markers, on the ground. */
+function drawBossGround(ctx: Ctx, b: Boss, frame: number) {
+  if (b.dying >= 0) return;
+  if (b.light !== null) {
+    const [x, y] = walkerHead(b);
+    const len = H * 1.3, caught = b.spotted > 0;
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = caught ? (frame % 8 < 4 ? 'rgba(255,80,60,0.30)' : 'rgba(255,120,80,0.22)') : 'rgba(255,240,190,0.16)';
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.sin(b.light - LIGHT_SPREAD) * len, y + Math.cos(b.light - LIGHT_SPREAD) * len);
+    ctx.lineTo(x + Math.sin(b.light + LIGHT_SPREAD) * len, y + Math.cos(b.light + LIGHT_SPREAD) * len);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  for (const m of b.marks) {
+    // A target ring that blinks faster as the shell comes down, and the shell's shadow growing in it.
+    const k = m.t / MORTAR_FUSE;
+    const on = (frame >> (k > 0.6 ? 1 : 3)) % 2 === 0;
+    ctx.strokeStyle = on ? RED : '#f8a000';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(Math.round(m.x) + 0.5, Math.round(m.y) + 0.5, MORTAR_R, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = on ? RED : '#f8a000';
+    ctx.fillRect(Math.round(m.x) - 4, Math.round(m.y), 9, 1);
+    ctx.fillRect(Math.round(m.x), Math.round(m.y) - 4, 1, 9);
+    ctx.globalAlpha = 0.45;
+    disc(ctx, m.x, m.y, 1 + k * (MORTAR_R - 4), '#000');
+    ctx.globalAlpha = 1;
+  }
+}
+
+/** A boss's beam: a thin flickering line while it aims, then the beam itself; a charge and its all-out beam. */
+function drawBossBeam(ctx: Ctx, b: Boss, frame: number) {
+  if (b.dying >= 0) return;
+  const x = b.coreX, y = b.coreY + 8;
+  ctx.save();
+  ctx.lineCap = 'round';
+  if (b.beam) {
+    const angs = b.beam.twin ? [b.beam.ang, -b.beam.ang] : [b.beam.ang];
+    for (const ang of angs) {
+      const ex = x + Math.sin(ang) * 500, ey = y + Math.cos(ang) * 500;
+      const line = (width: number, color: string) => {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+      };
+      if (b.beam.t < BEAM_AIM) {
+        // It flickers, and turns white and thicker just before it fires.
+        if (b.beam.t >= BEAM_AIM - BEAM_LOCK) line(2, WHITE);
+        else line(1, frame % 4 < 2 ? '#f878f8' : '#a800a0');
+      } else {
+        ctx.globalCompositeOperation = 'lighter';
+        line(12 + (frame % 3), 'rgba(216,0,204,0.35)');
+        line(7, '#d800cc');
+        line(3, '#f8b8f8');
+        disc(ctx, x, y, 7 + (frame % 2), '#f878f8');
+        ctx.globalCompositeOperation = 'source-over';
+      }
+    }
+  }
+  if (b.charge) {
+    // Light gathers in the core, faster and brighter; the bar says how long is left to break it.
+    const k = b.charge.t / CHARGE_FRAMES;
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < 6; i++) {
+      const a = i * 1.047 + frame / 10, d = 40 * (1 - ((frame * 2 + i * 9) % 40) / 40);
+      disc(ctx, b.coreX + Math.cos(a) * d, b.coreY + Math.sin(a) * d, 1.5, '#f8b8f8');
+    }
+    disc(ctx, b.coreX, b.coreY, 4 + k * 14 + (frame % 3), 'rgba(216,0,204,0.5)');
+    disc(ctx, b.coreX, b.coreY, 2 + k * 8, WHITE);
+    ctx.globalCompositeOperation = 'source-over';
+    if ((frame >> 3) % 2) drawTextCentered(ctx, 'BREAK THE CORE!', W / 2, b.coreY + 48, YELLOW);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(W / 2 - 41, b.coreY + 60, 82, 5);
+    ctx.fillStyle = '#d800cc';
+    ctx.fillRect(W / 2 - 40, b.coreY + 61, Math.round(80 * k), 3);
+  }
+  if (b.mega > 0) {
+    // The all-out beam: the whole screen below the core burns.
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = `rgba(216,0,204,${frame % 4 < 2 ? 0.45 : 0.3})`;
+    ctx.fillRect(0, b.coreY, W, H);
+    ctx.fillStyle = 'rgba(248,184,248,0.5)';
+    ctx.fillRect(W / 2 - 50 + Math.sin(frame / 3) * 6, b.coreY, 100, H);
+    ctx.globalCompositeOperation = 'source-over';
+  }
+  ctx.restore();
+}
+
+/** Laser fences between satellite pairs, and the reach of gravity drones. */
+function drawFields(ctx: Ctx, w: World, frame: number) {
+  ctx.save();
+  for (const e of w.enemies) {
+    if (e.def.name === 'gravity') {
+      // A ring of dashes turning inward, faint, to show how far the pull reaches.
+      ctx.globalAlpha = 0.35;
+      ctx.strokeStyle = '#a858f8';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 6]);
+      ctx.lineDashOffset = -frame / 2;
+      for (const k of [1, 0.6]) {
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, GRAVITY_R * k * (1 - ((frame / 90) % 1) * 0.15), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.setLineDash([]);
+      ctx.globalAlpha = 1;
+    }
+    if (e.def.name === 'satellite' && e.link && !e.link.dead && e.p[3] <= Math.PI / 2) {
+      ctx.globalCompositeOperation = 'lighter';
+      for (const [width, color] of [[5, 'rgba(248,56,120,0.35)'], [2, frame % 4 < 2 ? '#f87898' : '#f83858'], [1, WHITE]] as const) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        ctx.moveTo(e.x, e.y);
+        ctx.lineTo(e.link.x, e.link.y);
+        ctx.stroke();
+      }
+      ctx.globalCompositeOperation = 'source-over';
+    }
+  }
+  ctx.restore();
+}
+
+/** A stealth fighter: a faint shimmer while cloaked, flickering in and out as it shows itself. */
+function drawStealth(ctx: Ctx, e: Enemy, frame: number) {
+  const [show, hide] = STEALTH_SHOW;
+  const edge = Math.min(Math.abs(e.t - show), Math.abs(e.t - hide));
+  ctx.save();
+  if (e.hidden) ctx.globalAlpha = 0.1 + (frame % 6 < 3 ? 0.08 : 0);
+  else if (edge < 10 && frame % 4 < 2) ctx.globalAlpha = 0.5;
+  drawAt(ctx, enemySprite(e), e.x, e.y);
+  ctx.restore();
+}
+
 /** Ash drifting down and embers rising, in screen space. */
 function drawAsh(ctx: Ctx, frame: number) {
   for (let i = 0; i < 46; i++) {
@@ -347,6 +505,20 @@ function drawRotor(ctx: Ctx, x: number, y: number, frame: number) {
 }
 
 /** Searchlights on the ground, each a cone sweeping to and fro, anchored to the map as it scrolls. */
+/** Stars far behind the scenery, slower than it, twinkling: only over open space. */
+function drawStars(ctx: Ctx, w: World) {
+  for (let i = 0; i < 90; i++) {
+    const h = hash(i * 7919 + 17);
+    const depth = 0.15 + (h % 3) * 0.15;
+    const x = (h >>> 4) % W;
+    const y = (((h >>> 12) % H) + w.dist * depth) % H;
+    if (w.terrain.levelAt(x, y, w.dist) !== 0) continue;
+    const tw = (w.frame + (h >>> 20)) % 90 < 6;
+    ctx.fillStyle = tw ? WHITE : depth > 0.4 ? '#c8d8f8' : depth > 0.2 ? '#8898c0' : '#506080';
+    ctx.fillRect(x, Math.floor(y), tw ? 2 : 1, tw ? 2 : 1);
+  }
+}
+
 function drawSearchlights(ctx: Ctx, w: World) {
   const SPACING = 13;
   const first = Math.floor(w.dist / TILE / SPACING) - 1;
@@ -379,21 +551,30 @@ function drawWorld(ctx: Ctx, w: World, frame: number) {
   for (const wr of w.wrecks) drawAt(ctx, spr('enemies/wreck'), wr.x, wr.y);
   for (const e of w.enemies) if (e.def.ground) drawGroundEnemy(ctx, e, w, frame);
   for (const it of w.items) if (it.kind === 'medal') drawItem(ctx, it, frame);
+  if (w.boss) drawBossGround(ctx, w.boss, frame);
   if (w.boss?.def.ground) drawBoss(ctx, w.boss, frame);
   for (const b of w.blasts) if (b.ground) drawBlast(ctx, b);
 
   if (w.terrain.ground.night) drawSearchlights(ctx, w);
+  if (w.terrain.ground.space) drawStars(ctx, w);
 
-  // Shadows of everything in the air.
-  for (const e of w.enemies) if (!e.def.ground && e.def.sprite) drawShadow(ctx, e.def.sprite, e.x, e.y);
+  // Shadows of everything in the air; in space nothing casts one.
   const b = w.boss;
-  if (b && !b.gone && !b.def.ground) drawShadow(ctx, b.open ? b.def.openSprite : b.def.sprite, b.x, b.y, 2);
-  if (w.player.alive) drawShadow(ctx, 'ships/player', w.player.x, w.player.y);
+  if (!w.terrain.ground.space) {
+    for (const e of w.enemies) if (!e.def.ground && e.def.sprite && !e.hidden) drawShadow(ctx, e.def.sprite, e.x, e.y);
+    if (b && !b.gone && !b.def.ground) drawShadow(ctx, b.open ? b.def.openSprite : b.def.sprite, b.x, b.y, 2);
+    if (w.player.alive) drawShadow(ctx, 'ships/player', w.player.x, w.player.y);
+  }
+  drawFields(ctx, w, frame);
 
   for (const s of w.shots) drawShot(ctx, s, frame);
   if (b && !b.def.ground) drawBoss(ctx, b, frame);
   for (const e of w.enemies) {
     if (e.def.ground || !e.def.sprite) continue;
+    if (e.def.name === 'stealth') {
+      drawStealth(ctx, e, frame);
+      continue;
+    }
     drawAt(ctx, enemySprite(e), e.x, e.y);
     if (e.def.name === 'heli') drawRotor(ctx, e.x, e.y, w.frame);
     if (e.def.name === 'rocket') {
@@ -411,6 +592,7 @@ function drawWorld(ctx: Ctx, w: World, frame: number) {
   }
   drawPlayer(ctx, w, frame);
   drawBullets(ctx, w, frame);
+  if (w.boss) drawBossBeam(ctx, w.boss, frame);
   if (w.terrain.ground.ash) drawAsh(ctx, frame);
   for (const pu of w.popups) drawTextShadow(ctx, pu.text, Math.round(pu.x - textWidth(pu.text) / 2), Math.round(pu.y), pu.t % 4 < 2 ? WHITE : GOLD);
 
@@ -523,7 +705,7 @@ function drawMiniShip(ctx: Ctx, x: number, y: number) {
 // ---------- overlays ----------
 
 function stageCard(ctx: Ctx, game: Game, w: World, frame: number) {
-  if (game.phase !== 'play' || game.timer > CARD_FRAMES) return;
+  if (game.phase !== 'play' || game.timer > CARD_FRAMES || w.warning > 0 || w.boss) return;
   if (game.timer > CARD_FRAMES - 30 && frame % 4 < 2) return;
   drawBox(ctx, 44, 110, 152, 50);
   const sub = w.loop > 1 ? `LOOP ${w.loop} - ${w.stage.name}` : w.stage.name;
@@ -532,15 +714,21 @@ function stageCard(ctx: Ctx, game: Game, w: World, frame: number) {
   drawTextScaled(ctx, title, Math.round(W / 2 - (textWidth(title) * 2) / 2), 132, 2, YELLOW);
 }
 
+/** The boss warning: a red band with WARNING blinking, the boss's name, and APPROACHING typed out. */
 function warningCard(ctx: Ctx, w: World, frame: number) {
-  if (w.warning <= 0 || (frame >> 4) % 2) return;
+  if (w.warning <= 0) return;
+  const age = WARNING_FRAMES - w.warning;
   ctx.fillStyle = 'rgba(248,56,0,0.35)';
-  ctx.fillRect(0, 120, W, 40);
+  ctx.fillRect(0, 114, W, 62);
   ctx.fillStyle = RED;
-  ctx.fillRect(0, 120, W, 2);
-  ctx.fillRect(0, 158, W, 2);
+  ctx.fillRect(0, 114, W, 2);
+  ctx.fillRect(0, 174, W, 2);
   const t = 'WARNING';
-  drawTextScaled(ctx, t, Math.round(W / 2 - textWidth(t)), 133, 2, WHITE);
+  if ((frame >> 4) % 2 === 0) drawTextScaled(ctx, t, Math.round(W / 2 - textWidth(t)), 122, 2, WHITE);
+  if (age < 30) return;
+  drawTextCentered(ctx, w.stage.boss.name, W / 2, 145, YELLOW);
+  const sub = 'APPROACHING';
+  drawTextCentered(ctx, sub.slice(0, Math.floor((age - 30) / 4)).padEnd(sub.length, ' '), W / 2, 158, LIGHT);
 }
 
 function drawPause(ctx: Ctx, w: World) {
@@ -550,7 +738,7 @@ function drawPause(ctx: Ctx, w: World) {
   drawTextCentered(ctx, 'PAUSED', W / 2, 130, YELLOW);
   drawTextCentered(ctx, `STAGE ${w.stageIdx + 1}  LOOP ${w.loop}  SHIPS ${w.lives}`, W / 2, 144);
   drawTextCentered(ctx, 'ENTER RESUME', W / 2, 162, LIGHT);
-  drawTextCentered(ctx, 'BKSP QUIT', W / 2, 176, GREY);
+  drawTextCentered(ctx, 'BKSP / SELECT QUIT', W / 2, 176, GREY);
 }
 
 function drawClear(ctx: Ctx, game: Game, w: World) {
@@ -620,7 +808,49 @@ function renderPlay(ctx: Ctx, game: Game, frame: number) {
   warningCard(ctx, w, frame);
   if (game.phase === 'play' && game.paused) drawPause(ctx, w);
   if (game.phase === 'clear') drawClear(ctx, game, w);
+  if (game.phase === 'ending') drawEnding(ctx, game, w);
   if (game.phase === 'over') drawOver(ctx, game, w, frame);
+}
+
+/** The ending: the story and the credits rolling up over a darkened field, then the score. */
+function drawEnding(ctx: Ctx, game: Game, w: World) {
+  const t = game.timer;
+  ctx.fillStyle = `rgba(0,0,0,${Math.min(0.75, t / 120).toFixed(2)})`;
+  ctx.fillRect(0, 0, W, H);
+  const lines: [string, string][] = [
+    ['MISSION COMPLETE', YELLOW],
+    ['', ''],
+    ['THE MOTHERSHIP BREAKS APART', WHITE],
+    ['AND BURNS UP IN THE ATMOSPHERE.', WHITE],
+    ['THE INVASION IS OVER -', WHITE],
+    ['FOR NOW.', WHITE],
+    ['', ''],
+    ['', ''],
+    ['STRIKE FIGHTER VEKTOR', RED],
+    ['', ''],
+    ['GAME', GREY],
+    ['TILMAN SCHIEBER', WHITE],
+    ['', ''],
+    ['CODE AND MUSIC', GREY],
+    ['CLAUDE', WHITE],
+    ['', ''],
+    ['ART', GREY],
+    ['PIXELLAB', WHITE],
+    ['', ''],
+    ['', ''],
+    [`SCORE ${w.score}`, YELLOW],
+    [`MEDALS ${w.medals}   LOOP ${w.loop}`, WHITE],
+    ['', ''],
+    ['', ''],
+    ['THEY ARE COMING BACK', RED],
+    ['STRONGER. GET READY.', RED],
+  ];
+  const top = H + 10 - t * 0.35;
+  lines.forEach(([text, color], i) => {
+    const y = Math.round(top + i * 14);
+    if (text && y > -10 && y < H) drawTextCentered(ctx, text, W / 2, y, color);
+  });
+  if (t > 180 && (t >> 5) % 2) drawTextCentered(ctx, 'PRESS ENTER TO GO ON', W / 2, H - 14, GREY);
 }
 
 let menuTerrain: Terrain | null = null;
@@ -694,7 +924,7 @@ function renderTitle(ctx: Ctx, game: Game, frame: number) {
   drawTextCentered(ctx, 'ARROWS MOVE  SPACE FIRE  X BOMB', W / 2, 300, LIGHT);
   if (game.debug) {
     drawTextCentered(ctx, 'DEBUG - NO HIGH SCORES', W / 2, 232, YELLOW);
-    drawTextCentered(ctx, '1-5 STAGE  N NEXT  B BOSS', W / 2, 252, LIGHT);
+    drawTextCentered(ctx, '1-6 STAGE  N NEXT  B BOSS', W / 2, 252, LIGHT);
     drawTextCentered(ctx, 'U POWER  I INVINCIBLE  V WEAPON', W / 2, 264, LIGHT);
   }
 }

@@ -40,6 +40,8 @@ export interface Ground {
   rails?: { col: number; from: number; to: number }[];
   /** Night: searchlights sweep the ground. */
   night?: boolean;
+  /** Space: level 0 is open space with stars behind it, and nothing casts a shadow. */
+  space?: boolean;
   /** Paints extra detail into tile row r's picture (y 0 is the row's top), after the tiles. */
   paint?(g: CanvasRenderingContext2D, t: Terrain, r: number): void;
 }

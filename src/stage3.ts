@@ -118,5 +118,5 @@ export const STAGE3: Stage = {
     decor: { level: Level.Base, props: 'decor/arctic_', density: 13, markings: true },
   },
   boss: BATTLESHIP,
-  key: -2,
+  key: 0,
 };

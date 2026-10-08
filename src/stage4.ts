@@ -165,5 +165,5 @@ export const STAGE4: Stage = {
     paint,
   },
   boss: WALKER,
-  key: 5,
+  key: 0,
 };

@@ -30,6 +30,8 @@ export interface Enemy {
   hidden?: boolean;
   /** Has been on screen, so leaving it means it's gone. */
   seen: boolean;
+  /** The other end of a laser fence. */
+  link?: Enemy;
 }
 
 export interface EnemyDef {
@@ -46,6 +48,8 @@ export interface EnemyDef {
   /** On water: goes down without leaving a wreck. */
   sinks?: boolean;
   update(e: Enemy, w: World): void;
+  /** Called when shot down, after the blast and the drop. */
+  onDeath?(e: Enemy, w: World): void;
 }
 
 /** Extra shots in a volley: from stage 4 on, and on every later loop. */
@@ -495,7 +499,183 @@ function turn(e: Enemy, want: number, rate: number) {
   e.aim += Math.max(-rate, Math.min(rate, d));
 }
 
-export const ENEMIES = { fighter, gunship, carrier, tank, bunker, interceptor, bomber, artillery, destroyer, drone, heli, popup, trainEngine, trainCar, lavaboat, magmaTurret, silo, rocket, part, groundPart };
+// ---------- stage 6: orbit ----------
+
+/** Asteroid: drifts at (p[0], p[1]) and tumbles. Shot down, it splits into two of the next size. */
+function asteroid(size: 'big' | 'mid' | 'small', hp: number, r: number, score: number, into?: () => EnemyDef): EnemyDef {
+  return {
+    name: 'asteroid',
+    sprite: `enemies/asteroid_${size}`,
+    hp,
+    score,
+    r,
+    ground: false,
+    big: size === 'big',
+    update(e) {
+      e.vx = e.p[0] ?? 0;
+      e.vy = e.p[1] ?? 0.8;
+    },
+    onDeath(e, w) {
+      if (!into) return;
+      for (const side of [-1, 1]) {
+        const k = w.spawn(into(), e.x + side * r * 0.5, e.y, [(e.p[0] ?? 0) + side * (0.5 + w.rng() * 0.4), (e.p[1] ?? 0.8) + w.rng() * 0.4]);
+        k.seen = true;
+      }
+    },
+  };
+}
+const asteroidSmall = asteroid('small', 2, 6, 100);
+const asteroidMid = asteroid('mid', 8, 11, 300, () => asteroidSmall);
+const asteroidBig = asteroid('big', 26, 18, 600, () => asteroidMid);
+
+/** How close the player may come to a laser fence before it burns. */
+export const FENCE_R = 3;
+
+/**
+ * Satellite: one end of a laser fence. A pair turns slowly round its middle while it drifts down;
+ * p = [centre x, centre y, radius, angle, turn speed]. The fence burns while both ends are alive.
+ */
+const satellite: EnemyDef = {
+  name: 'satellite',
+  sprite: 'enemies/satellite',
+  hp: 16,
+  score: 800,
+  r: 11,
+  ground: false,
+  update(e, w) {
+    const [cx, , radius, a0, spin] = e.p;
+    e.p[1] += 0.55;
+    const a = a0 + e.t * spin;
+    e.vx = cx + Math.cos(a) * radius - e.x;
+    e.vy = e.p[1] + Math.sin(a) * radius - e.y;
+    if (e.y > 10 && e.t % 150 === 75) aimed(w, e.x, e.y, 1 + loopShots(w), 0.2, 2.0);
+    // The pair's first satellite checks the fence against the ship.
+    const o = e.link;
+    if (!o || o.dead || a0 > Math.PI / 2) return;
+    const p = w.player;
+    const dx = o.x - e.x, dy = o.y - e.y, len2 = dx * dx + dy * dy || 1;
+    const k = Math.max(0, Math.min(1, ((p.x - e.x) * dx + (p.y - e.y) * dy) / len2));
+    if (Math.hypot(e.x + dx * k - p.x, e.y + dy * k - p.y) < FENCE_R) w.hurt();
+  },
+};
+
+/** Mine: drifts down, then creeps toward the ship. Close by, or shot, it bursts into a ring. */
+const mine: EnemyDef = {
+  name: 'mine',
+  sprite: 'enemies/mine',
+  hp: 4,
+  score: 300,
+  r: 7,
+  ground: false,
+  update(e, w) {
+    const p = w.player;
+    const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
+    if (e.t < 40 || !p.alive) {
+      e.vx = 0;
+      e.vy = 0.9;
+    } else {
+      e.vx += ((dx / d) * 0.55 - e.vx) * 0.05;
+      e.vy += ((dy / d) * 0.55 - e.vy) * 0.05;
+    }
+    if (d < 30 && p.alive) {
+      e.dead = true;
+      w.blast(e.x, e.y, false, false);
+      ring(w, e.x, e.y, 8, 1.2, e.t / 10);
+    }
+  },
+  onDeath(e, w) {
+    ring(w, e.x, e.y, 6, 1.1, e.t / 10);
+  },
+};
+
+/** Stealth fighter: cloaked (and out of reach) on the way in, shows itself to fire, then cloaks and leaves. */
+export const STEALTH_SHOW: [number, number] = [50, 120];
+const stealth: EnemyDef = {
+  name: 'stealth',
+  sprite: 'enemies/stealth',
+  hp: 6,
+  score: 700,
+  r: 9,
+  ground: false,
+  update(e, w) {
+    const row = e.p[0] ?? 90;
+    e.hidden = e.t < STEALTH_SHOW[0] || e.t > STEALTH_SHOW[1];
+    if (e.t <= STEALTH_SHOW[1]) {
+      e.vy = Math.max(0, (row - e.y) * 0.06);
+      e.vx = Math.sin(e.t / 20) * 0.4;
+    } else {
+      e.vy = Math.min(2.4, e.vy + 0.05);
+      e.vx = e.p[1] ?? 0.8;
+    }
+    if (e.t === 70 || e.t === 100) aimed(w, e.x, e.y + 6, 3 + loopShots(w) * 2, 0.18, 2.4);
+  },
+};
+
+/** How far a gravity drone's pull reaches, and how hard it pulls. */
+export const GRAVITY_R = 110;
+const GRAVITY_PULL = 0.5;
+
+/** Gravity drone: hovers at row p[0], drags the ship toward it, and sends out slow rings. */
+const gravity: EnemyDef = {
+  name: 'gravity',
+  sprite: 'enemies/gravity',
+  hp: 30,
+  score: 2000,
+  r: 13,
+  ground: false,
+  update(e, w) {
+    const row = e.p[0] ?? 80;
+    if (e.t < 420) {
+      e.vy = (row - e.y) * 0.04;
+      e.vx = Math.sin(e.t / 50) * 0.5;
+    } else e.vy = Math.min(1.2, e.vy + 0.02);
+    const p = w.player;
+    const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy) || 1;
+    if (p.alive && d < GRAVITY_R && d > 24 && e.y > 0) {
+      const f = GRAVITY_PULL * (1 - d / GRAVITY_R);
+      p.x += (dx / d) * f;
+      p.y += (dy / d) * f;
+    }
+    if (e.y > 10 && e.t % 140 === 60) ring(w, e.x, e.y, 10 + loopShots(w) * 4, 1.0, e.t / 20);
+  },
+};
+
+/** Raider: the space fighter. Flies the fighter's paths (see `fighter`). */
+const raider: EnemyDef = { ...fighter, name: 'raider', sprite: 'enemies/raider', hp: 3 };
+
+/** Frames a hangar's cycle lasts; within it, when its doors are open. */
+export const HANGAR_CYCLE = 220;
+export const hangarOpen = (e: Enemy) => {
+  const k = (e.t + (e.p[0] ?? 0)) % HANGAR_CYCLE;
+  return k >= 80 && k < 170;
+};
+
+/** Hangar: a launch hatch in the station hull. Armoured shut; opens to launch a raider, and can be hurt then. */
+const hangar: EnemyDef = {
+  name: 'hangar',
+  sprite: 'enemies/hangar_closed',
+  hp: 20,
+  score: 1500,
+  r: 12,
+  ground: true,
+  update(e, w) {
+    e.vx = 0;
+    e.vy = w.scroll;
+    e.armored = !hangarOpen(e);
+    if (e.y < 10 || e.y > H - 60) return;
+    const k = (e.t + (e.p[0] ?? 0)) % HANGAR_CYCLE;
+    if (k === 100 && w.player.alive) {
+      const r = w.spawn(raider, e.x, e.y, [2, 180 + (w.rng() - 0.5) * 60, 10]);
+      r.seen = true;
+    }
+    if (k === 140) aimed(w, e.x, e.y, 3, 0.25, 2.0);
+  },
+};
+
+export const ENEMIES = {
+  fighter, gunship, carrier, tank, bunker, interceptor, bomber, artillery, destroyer, drone, heli, popup, trainEngine, trainCar, lavaboat, magmaTurret, silo, rocket, part, groundPart,
+  asteroidBig, asteroidMid, asteroidSmall, satellite, mine, stealth, gravity, raider, hangar,
+};
 export type EnemyName = keyof typeof ENEMIES;
 
 export function makeEnemy(def: EnemyDef, x: number, y: number, p: number[] = []): Enemy {

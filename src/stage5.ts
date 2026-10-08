@@ -131,5 +131,5 @@ export const STAGE5: Stage = {
     decor: { level: Level.Ash, props: 'decor/volcano_', density: 9, markings: false },
   },
   boss: CRATER,
-  key: -4,
+  key: 0,
 };

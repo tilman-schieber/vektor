@@ -109,5 +109,5 @@ export const STAGE2: Stage = {
     profile,
   },
   boss: CRAWLER,
-  key: 3,
+  key: 0,
 };

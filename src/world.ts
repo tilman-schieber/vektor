@@ -16,6 +16,8 @@ export const MAX_BOMBS = 7;
 /** Extra lives at these scores. */
 export const EXTENDS = [200000, 500000];
 const START_BOMBS = 3;
+/** Frames of the boss warning before the boss comes in. */
+export const WARNING_FRAMES = 200;
 /** Easy mode: frames until a broken shield comes back. */
 export const SHIELD_REGEN = 20 * 60;
 
@@ -290,7 +292,7 @@ export class World {
   private runTimeline() {
     while (this.waveIdx < this.waves.length && this.dist >= this.waves[this.waveIdx].at) this.waves[this.waveIdx++].run(this);
     if (!this.boss && this.warning === 0 && this.dist >= this.stage.length) {
-      this.warning = 200;
+      this.warning = WARNING_FRAMES;
       sfx.warning();
     }
     if (this.warning > 0 && --this.warning === 0) this.boss = new Boss(this, this.stage.boss);
@@ -402,6 +404,13 @@ export class World {
     sfx.bomb();
   }
 
+  /** Hurts the ship as a bullet would: for bosses' beams and blasts. */
+  hurt() {
+    const p = this.player;
+    if (!p.alive || p.invuln > 0 || p.timer > 0 || this.state !== 'play' || this.god) return;
+    this.hitPlayer();
+  }
+
   /** A hit: the shield takes it if it's up, otherwise the ship is lost. */
   private hitPlayer() {
     const p = this.player;
@@ -509,6 +518,7 @@ export class World {
     if (e.def.ground && !e.def.sinks) this.wrecks.push({ x: e.x, y: e.y });
     if (e.def.big) this.shake = Math.max(this.shake, 12);
     if (e.drop) this.dropItem(e.drop, e.x, e.y);
+    e.def.onDeath?.(e, this);
   }
 
   dropItem(kind: ItemKind, x: number, y: number) {
@@ -539,7 +549,8 @@ export class World {
     }
     this.bullets = this.bullets.filter((b) => !b.dead);
     for (const b of bursting) {
-      ring(this, b.x, b.y, 8 + this.loop * 2, 1.2, b.t / 9);
+      if (b.burstN) ring(this, b.x, b.y, b.burstN + (this.loop - 1) * 4, 1.5);
+      else ring(this, b.x, b.y, 8 + this.loop * 2, 1.2, b.t / 9);
       this.particles.push({ x: b.x, y: b.y, vx: 0, vy: 0, life: 8, color: '#f8d838' });
     }
   }
@@ -702,7 +713,8 @@ export class World {
       if (dx * dx + dy * dy < (b.r + 2) ** 2) return this.hitPlayer();
     }
     for (const e of this.enemies) {
-      if (e.def.ground || e.dead) continue;
+      // Cloaked ships pass through you; they only show when they fire.
+      if (e.def.ground || e.dead || e.hidden) continue;
       const r = (e.r ?? e.def.r) * 0.6 + 2;
       if (Math.abs(e.x - p.x) < r && Math.abs(e.y - p.y) < r) return this.hitPlayer();
     }

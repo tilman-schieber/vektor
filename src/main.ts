@@ -95,6 +95,40 @@ setupDrag(
   },
 );
 
+// Gamepads, in the standard mapping: d-pad or left stick to move, A or X fire, B or Y bomb,
+// Start pauses, Select quits from pause. Y opens the scores on the title screen.
+const PAD_BUTTONS: [number, Action][] = [
+  [0, 'fire'],
+  [2, 'fire'],
+  [1, 'bomb'],
+  [3, 'bomb'],
+  [9, 'start'],
+  [8, 'quit'],
+  [12, 'up'],
+  [13, 'down'],
+  [14, 'left'],
+  [15, 'right'],
+];
+const STICK = 0.4;
+let padHeld = new Set<Action>();
+
+function readPads() {
+  const held = new Set<Action>();
+  for (const pad of navigator.getGamepads?.() ?? []) {
+    if (!pad) continue;
+    for (const [i, a] of PAD_BUTTONS) {
+      if (!pad.buttons[i]?.pressed) continue;
+      held.add(i === 3 && game.phase === 'title' ? 'scores' : a);
+    }
+    const [x = 0, y = 0] = pad.axes;
+    if (x < -STICK) held.add('left');
+    if (x > STICK) held.add('right');
+    if (y < -STICK) held.add('up');
+    if (y > STICK) held.add('down');
+  }
+  return held;
+}
+
 function refreshHeld() {
   input.held.clear();
   for (const key of heldKeys.values()) {
@@ -102,6 +136,17 @@ function refreshHeld() {
     if (a) input.held.add(a);
   }
   for (const b of touchHeld) input.held.add(b.a);
+  const pad = readPads();
+  for (const a of pad) {
+    input.held.add(a);
+    if (padHeld.has(a)) continue;
+    input.pressed.add(a);
+    unlockAudio();
+    // Typing a name: A or Start enters it, B rubs out a letter.
+    if (game.phase === 'entry' && (a === 'fire' || a === 'start')) input.typed.push('Enter');
+    if (game.phase === 'entry' && a === 'bomb') input.typed.push('Backspace');
+  }
+  padHeld = pad;
 }
 
 // Fixed 60 Hz simulation.

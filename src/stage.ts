@@ -18,7 +18,7 @@ export interface Stage {
   waves: Wave[];
   ground: Ground;
   boss: BossDef;
-  /** Music key, in semitones from A minor. */
+  /** Semitones to move the music by; every stage has a tune in its own key, so 0. */
   key: number;
 }
 

@@ -1,9 +1,10 @@
 import { MODES, Mode } from './modes';
 import { loadTables, saveTables, rankFor, ScoreEntry, Tables, MAX_SCORES, load, save, fetchGlobal, submitGlobal, flushPending } from './scores';
-import { sfx, music, TUNE } from './audio';
+import { sfx, music, TUNE, stageTune, bossKey } from './audio';
 import { makeRng, randomSeed } from './rng';
 import { World, Controls, MAX_LEVEL, MAX_MISSILES, MAX_BOMBS } from './world';
 import { HELP_PAGES } from './help';
+import { STAGES } from './stages';
 
 export type Action = 'up' | 'down' | 'left' | 'right' | 'fire' | 'bomb' | 'start' | 'back' | 'quit' | 'mute' | 'scores';
 
@@ -19,7 +20,7 @@ export interface Input {
   touching: boolean;
 }
 
-export type Phase = 'title' | 'play' | 'clear' | 'over' | 'entry' | 'scores' | 'help';
+export type Phase = 'title' | 'play' | 'clear' | 'ending' | 'over' | 'entry' | 'scores' | 'help';
 
 export interface Settings {
   /** Index into MUSIC_NAMES. */
@@ -43,6 +44,8 @@ export const CARD_FRAMES = 180;
 /** Stage clear: when each bonus line appears, and when the next stage starts. */
 export const TALLY_AT = [90, 150, 210];
 const CLEAR_FRAMES = 420;
+/** How long the ending rolls before the next loop starts on its own. */
+export const ENDING_FRAMES = 60 * 40;
 export const NO_MISS_BONUS = 30000;
 export const BOMB_BONUS = 3000;
 
@@ -135,6 +138,8 @@ export class Game {
         return this.stepPlay(input);
       case 'clear':
         return this.stepClear(input);
+      case 'ending':
+        return this.stepEnding(input);
       case 'over':
         this.world!.update(this.controls(input, false));
         if (++this.timer > 60 && (pressed.has('start') || pressed.has('fire'))) {
@@ -239,15 +244,13 @@ export class Game {
       if (music.running) music.stop();
       return;
     }
-    const want = w.boss || w.warning > 0 ? TUNE.BOSS : TUNE.STAGE;
+    const fight = w.boss || w.warning > 0;
+    const want = fight ? (w.stageIdx === 5 ? TUNE.FINAL : TUNE.BOSS) : stageTune(w.stageIdx);
     if (w.state === 'clear') return music.stop();
     music.setIntensity(Math.min(5, 1 + Math.floor(w.progress * 5)));
     music.setTempo(1 + (w.loop - 1) * 0.05);
-    music.setKey(w.stage.key);
-    if (!music.running || music.tune !== want) {
-      if (want === TUNE.STAGE) music.setMelody(w.loop * 7 + w.stageIdx * 101);
-      music.play(want, music.tune !== want);
-    }
+    music.setKey(w.stage.key + (want === TUNE.BOSS ? bossKey(w.stageIdx) : 0));
+    if (!music.running || music.tune !== want) music.play(want, true);
   }
 
   private stepPlay(input: Input) {
@@ -289,11 +292,30 @@ export class Game {
       if (this.tally[i][1]) sfx.tally();
     });
     if (this.timer >= CLEAR_FRAMES) {
+      // After the last stage, the ending; then round again.
+      if (w.stageIdx === STAGES.length - 1) {
+        this.phase = 'ending';
+        this.timer = 0;
+        return;
+      }
       w.nextStage();
       this.phase = 'play';
       this.timer = 0;
       sfx.start();
     }
+  }
+
+  /** The ending rolls by; START or FIRE skips it once it has run a while. Then the next loop starts. */
+  private stepEnding(input: Input) {
+    const w = this.world!;
+    this.timer++;
+    w.update(this.controls(input, false));
+    const skip = this.timer > 180 && (input.pressed.has('start') || input.pressed.has('fire'));
+    if (this.timer < ENDING_FRAMES && !skip) return;
+    w.nextStage();
+    this.phase = 'play';
+    this.timer = 0;
+    sfx.start();
   }
 
   private gameOver() {
@@ -406,12 +428,12 @@ export class Game {
 
   // ---------- debug mode ----------
 
-  /** 1-5 stage, N next stage, B boss, U full power, I invincible, V switch weapon. */
+  /** 1-6 stage, N next stage, B boss, U full power, I invincible, V switch weapon. */
   private debugKeys(typed: string[]) {
     const w = this.world!;
     const p = w.player;
     for (const k of typed) {
-      if (k >= '1' && k <= '5') this.gotoStage(Number(k));
+      if (k >= '1' && k <= String(STAGES.length)) this.gotoStage(Number(k));
       else if (k === 'N') this.gotoStage(w.stageIdx + 2);
       else if (k === 'B') this.bossNow();
       else if (k === 'U') Object.assign(p, { level: MAX_LEVEL, missiles: MAX_MISSILES, bombs: MAX_BOMBS });

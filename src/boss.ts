@@ -2,12 +2,14 @@
 // core, phase 3 the core in a rage below half health. A BossDef gives the layout and the patterns.
 import type { World } from './world';
 import { ENEMIES, Enemy } from './enemies';
-import { aimed, aimAt, fan, ring, shoot, canFire, lob, flame, needle, needles, frost } from './bullets';
+import { aimed, aimAt, fan, ring, shoot, canFire, lob, flame, needle, needles, frost, bomb } from './bullets';
 import { sfx } from './audio';
-import { W } from './draw';
+import { W, H } from './draw';
 import { spr } from './sprites';
 
 export interface BossDef {
+  /** Shown on the warning card. */
+  name: string;
   sprite: string;
   /** The same picture with the core hatch open. */
   openSprite: string;
@@ -52,6 +54,20 @@ export class Boss {
   core: Enemy;
   body: Enemy;
   spin = 0;
+  /** Special attacks, for the bosses that have them. A beam aims for BEAM_AIM frames, then fires. */
+  beam: { t: number; ang: number; twin?: boolean } | null = null;
+  /** Mortar shells on their way down: where they land, and frames since launch. */
+  marks: { x: number; y: number; t: number }[] = [];
+  /** A searchlight's heading (0 straight down), or null when off. */
+  light: number | null = null;
+  /** Frames the player has been in the searchlight. */
+  spotted = 0;
+  /** A big attack charging up: frames charged, and the core's health when it began. */
+  charge: { t: number; hp: number } | null = null;
+  /** Frames left of the all-out beam that follows a full charge. */
+  mega = 0;
+  /** Frames left stunned after its charge was broken: it holds fire. */
+  stun = 0;
   /** Full health of one pod, and of the core: tougher every loop. */
   podMax: number;
   coreMax: number;
@@ -79,6 +95,8 @@ export class Boss {
     this.body.hp = Infinity;
     this.body.r = def.bodyR;
     this.parts.forEach((e) => (e.seen = true));
+    // Shots bounce off the guns until it has come in and the fight starts.
+    this.pods.forEach((e) => (e.armored = true));
   }
 
   get parts() {
@@ -119,6 +137,7 @@ export class Boss {
       if (this.t > 180) {
         this.phase = 1;
         this.t = 0;
+        this.pods.forEach((e) => (e.armored = false));
       }
     } else {
       this.def.act(this, w);
@@ -184,6 +203,7 @@ export class Boss {
 // ---------- stage 1: the flying fortress ----------
 
 export const FORTRESS: BossDef = {
+  name: 'SKY FORTRESS',
   sprite: 'boss/boss',
   openSprite: 'boss/boss_open',
   ground: false,
@@ -200,6 +220,14 @@ export const FORTRESS: BossDef = {
   hoverY: 74,
   act(b, w) {
     const c = b.core;
+    // Escort fighters launch in pairs off the rear deck and swoop down at you.
+    const escorts = (every: number) => {
+      if (b.t % every !== every - 1 || !w.player.alive) return;
+      for (const side of [-1, 1]) {
+        const e = w.spawn(ENEMIES.fighter, b.x + side * 20, b.y - 30, [2, 190 + side * 10, 20]);
+        e.seen = true;
+      }
+    };
     if (b.phase === 1) {
       b.x = W / 2 + Math.sin(b.t / 90) * 34;
       b.pods.forEach((pod, i) => {
@@ -209,10 +237,12 @@ export const FORTRESS: BossDef = {
         if (k === 0) aimed(w, pod.x, pod.y + 10, 3, 0.2, 2.2);
         if (b.t % 200 === 120 + (side > 0 ? 30 : 0)) fan(w, pod.x, pod.y + 10, side * -0.2, 5, 0.26, 1.5, true);
       });
+      escorts(260);
     } else if (b.phase === 2) {
+      // The bomb bay opens: rows of bombs fall and burst into crosses. Stand between them.
       b.x += (W / 2 - b.x) * 0.02;
-      if (b.t % 70 === 30) ring(w, c.x, c.y, 14 + w.loop * 2, 1.5, b.t / 30);
-      if (b.t % 70 === 0) aimed(w, b.x, b.y + 20, 3, 0.12, 2.6, true);
+      if (b.t % 100 === 40) for (let k = -2; k <= 2; k++) bomb(w, c.x + k * 22, c.y + 14, 30 + Math.abs(k) * 6 + Math.floor(w.rng() * 20));
+      if (b.t % 100 === 90) aimed(w, b.x, b.y + 20, 3, 0.12, 2.6, true);
     } else {
       b.x = W / 2 + Math.sin(b.t / 50) * 60;
       if (b.t % 5 === 0 && canFire(w, b.x, b.y)) {
@@ -220,7 +250,8 @@ export const FORTRESS: BossDef = {
         for (let k = 0; k < 3; k++) shoot(w, c.x, c.y, b.spin + (k * Math.PI * 2) / 3, 1.5);
         sfx.enemyShot();
       }
-      if (b.t % 90 === 45) aimed(w, b.x, b.y + 20, 5, 0.16, 2.4, true);
+      if (b.t % 90 === 45) aimed(w, b.x, b.y + 20, 3, 0.2, 2.4, true);
+      escorts(220);
     }
   },
 };
@@ -228,6 +259,7 @@ export const FORTRESS: BossDef = {
 // ---------- stage 2: the desert crawler ----------
 
 export const CRAWLER: BossDef = {
+  name: 'DESERT CRAWLER',
   sprite: 'boss/boss2',
   openSprite: 'boss/boss2_open',
   ground: true,
@@ -281,6 +313,7 @@ export const CRAWLER: BossDef = {
 // ---------- stage 3: the battleship ----------
 
 export const BATTLESHIP: BossDef = {
+  name: 'FROST BATTLESHIP',
   sprite: 'boss/boss3',
   openSprite: 'boss/boss3_open',
   ground: true,
@@ -339,6 +372,7 @@ export const BATTLESHIP: BossDef = {
 const stride = (b: Boss, leg: number) => b.t / 30 + leg * Math.PI;
 
 export const WALKER: BossDef = {
+  name: 'GIANT WALKER',
   sprite: 'boss/boss4',
   openSprite: 'boss/boss4_open',
   ground: true,
@@ -363,39 +397,104 @@ export const WALKER: BossDef = {
   hoverY: 92,
   act(b, w) {
     const c = b.core;
-    b.x = W / 2 + Math.sin(b.t / 200) * 20;
-    b.y = 92 + Math.abs(Math.sin(b.t / 30)) * 2;
-    // Each time a foot comes down the ground shakes, and a live leg sends out a ring.
-    for (const leg of [0, 1]) {
-      const now = Math.sin(stride(b, leg)), before = Math.sin(stride(b, leg) - 1 / 30);
-      if (!(before > 0 && now <= 0)) continue;
-      const pod = b.pods[2 + leg];
-      w.shake = Math.max(w.shake, pod.dead ? 2 : 5);
-      if (!pod.dead && b.phase === 1) ring(w, pod.x, pod.y + 8, 8 + w.loop * 2, 1.1, b.t / 20, true);
+    // With both legs shot away it sinks to its knees and stops walking.
+    const kneel = b.pods[2].dead && b.pods[3].dead;
+    if (kneel) b.y += (104 - b.y) * 0.05;
+    else {
+      b.x = W / 2 + Math.sin(b.t / 200) * 20;
+      b.y = 92 + Math.abs(Math.sin(b.t / 30)) * 2;
+      // Each time a foot comes down the ground shakes, and a live leg sends out a ring.
+      for (const leg of [0, 1]) {
+        const now = Math.sin(stride(b, leg)), before = Math.sin(stride(b, leg) - 1 / 30);
+        if (!(before > 0 && now <= 0)) continue;
+        const pod = b.pods[2 + leg];
+        w.shake = Math.max(w.shake, pod.dead ? 2 : 5);
+        if (!pod.dead && b.phase === 1) ring(w, pod.x, pod.y + 8, 8 + w.loop * 2, 1.1, b.t / 20, true);
+      }
     }
     if (b.phase === 1) {
+      // A searchlight on its head sweeps the street. Caught in it, the cannons open up.
+      b.light = Math.sin(b.t / 75) * 0.75;
+      const [hx, hy] = walkerHead(b);
+      const lit = w.player.alive && w.player.y > hy && Math.abs(aimAt(w, hx, hy) - b.light) < LIGHT_SPREAD;
+      b.spotted = lit ? b.spotted + 1 : Math.max(0, b.spotted - 2);
+      if (b.spotted === SPOTTED) sfx.spotted();
       [0, 1].forEach((i) => {
         const pod = b.pods[i];
-        if (!pod.dead && (b.t + i * 40) % 80 === 0) fan(w, pod.x + Math.sin(pod.aim) * 10, pod.y + Math.cos(pod.aim) * 10, pod.aim, 5, 0.18, 1.9);
+        if (pod.dead) return;
+        const gx = pod.x + Math.sin(pod.aim) * 10, gy = pod.y + Math.cos(pod.aim) * 10;
+        if (b.spotted >= SPOTTED) {
+          if ((b.t + i * 6) % 12 === 0) aimed(w, gx, gy, 1, 0, 2.8);
+        } else if ((b.t + i * 60) % 120 === 0) fan(w, gx, gy, pod.aim, 3, 0.2, 1.9);
       });
-    } else if (b.phase === 2) {
-      // A stream of shots hosed side to side, with gaps to slip through.
-      if (b.t % 7 === 0) shoot(w, c.x, c.y + 8, Math.sin(b.t / 40) * 0.9, 2.2);
+      return;
+    }
+    b.light = null;
+    // From here on the core charges a beam: it aims, then fires and swings slowly after you.
+    const period = b.phase === 2 ? 200 : 170;
+    if (b.t % period === 40) b.beam = { t: 0, ang: aimAt(w, c.x, c.y + 8) };
+    if (b.beam) {
+      const beam = b.beam;
+      const want = aimAt(w, c.x, c.y + 8);
+      // It tracks you while it aims, locks when the line turns white, and swings slowly once it burns.
+      const turn = beam.t < BEAM_AIM - BEAM_LOCK ? 0.03 : beam.t < BEAM_AIM ? 0 : 0.0045;
+      beam.ang += Math.max(-turn, Math.min(turn, want - beam.ang));
+      if (beam.t === BEAM_AIM) sfx.beam();
+      if (beam.t >= BEAM_AIM) {
+        w.shake = Math.max(w.shake, 2);
+        if (beamHits(w, c.x, c.y + 8, beam.ang)) w.hurt();
+      }
+      if (++beam.t >= BEAM_AIM + BEAM_FIRE) b.beam = null;
+    }
+    if (b.phase === 2) {
+      // Between beams, a stream of shots hosed side to side.
+      if (!b.beam && b.t % 7 === 0) shoot(w, c.x, c.y + 8, Math.sin(b.t / 40) * 0.9, 2.2);
       if (b.t % 120 === 60) ring(w, c.x, c.y, 12 + w.loop * 2, 1.3, b.t / 30);
     } else {
-      if (b.t % 8 === 0 && canFire(w, c.x, c.y)) {
-        const a = Math.sin(b.t / 36) * 0.9;
-        shoot(w, c.x, c.y + 8, a, 2.1);
-        shoot(w, c.x, c.y + 8, -a, 2.1);
+      // In a rage it also calls down mortars: a marker where each shell will land, then the blast.
+      if (b.t % 40 === 20 && w.player.alive) {
+        const x = Math.max(16, Math.min(W - 16, w.player.x + (w.rng() - 0.5) * 70));
+        const y = Math.max(140, Math.min(H - 30, w.player.y + (w.rng() - 0.5) * 50));
+        b.marks.push({ x, y, t: 0 });
+        sfx.mortar();
       }
-      if (b.t % 80 === 40) aimed(w, c.x, c.y + 8, 3, 0.2, 2.6, true);
     }
+    for (const m of b.marks) {
+      if (++m.t < MORTAR_FUSE) continue;
+      w.blast(m.x, m.y, false, true);
+      w.debris(m.x, m.y, 8, '#8a7050');
+      if (Math.hypot(w.player.x - m.x, w.player.y - m.y) < MORTAR_R) w.hurt();
+    }
+    b.marks = b.marks.filter((m) => m.t < MORTAR_FUSE);
   },
 };
+
+/** Searchlight: the cone's half-width, and how many frames in it before the cannons open up. */
+export const LIGHT_SPREAD = 0.17;
+const SPOTTED = 12;
+/** Beam: frames aiming, frames firing, and how wide it hurts. */
+export const BEAM_AIM = 55;
+/** Frames before firing that the aim locks (the line turns white). */
+export const BEAM_LOCK = 15;
+const BEAM_FIRE = 55;
+const BEAM_HALF = 5;
+/** Mortar: frames from the marker to the blast, and the blast's reach. */
+export const MORTAR_FUSE = 70;
+export const MORTAR_R = 16;
+
+/** Where the walker's searchlight sits. */
+export const walkerHead = (b: Boss): [number, number] => [b.x, b.y - 24];
+
+function beamHits(w: World, x: number, y: number, ang: number) {
+  const dx = w.player.x - x, dy = w.player.y - y;
+  const along = dx * Math.sin(ang) + dy * Math.cos(ang);
+  return along > 0 && Math.abs(dx * Math.cos(ang) - dy * Math.sin(ang)) < BEAM_HALF;
+}
 
 // ---------- stage 5: the crater fortress ----------
 
 export const CRATER: BossDef = {
+  name: 'CRATER FORTRESS',
   sprite: 'boss/boss5',
   openSprite: 'boss/boss5_open',
   ground: true,
@@ -446,3 +545,120 @@ export const CRATER: BossDef = {
     }
   },
 };
+
+// ---------- stage 6: the mothership ----------
+
+/** Charging: frames to a full charge, and the damage to the core (of its full health) that breaks it. */
+export const CHARGE_FRAMES = 170;
+const CHARGE_BREAK = 0.07;
+const MEGA_FRAMES = 80;
+
+export const MOTHERSHIP: BossDef = {
+  name: 'MOTHERSHIP',
+  sprite: 'boss/boss6',
+  openSprite: 'boss/boss6_open',
+  // In space nothing casts a shadow; it can't be rammed either.
+  ground: true,
+  // Rear batteries, then front batteries.
+  pods: [
+    [-62, -20],
+    [62, -20],
+    [-40, 24],
+    [40, 24],
+  ],
+  turrets: true,
+  podHp: 130,
+  coreHp: 900,
+  coreY: -6,
+  bodyY: -40,
+  bodyR: 30,
+  hoverY: 86,
+  act(b, w) {
+    const c = b.core;
+    b.x = W / 2 + Math.sin(b.t / 130) * 26;
+    if (b.phase === 1) {
+      // Every battery has its own weapon: lobbed bombs, big spreads, locking needles, frost snakes.
+      const [rl, rr, fl, fr] = b.pods;
+      const gun = (pod: Enemy): [number, number] => [pod.x + Math.sin(pod.aim) * 10, pod.y + Math.cos(pod.aim) * 10];
+      if (!rl.dead && b.t % 160 === 40) lob(w, ...gun(rl), rl.aim, 1.6, 50);
+      if (!rr.dead && b.t % 140 === 110) fan(w, ...gun(rr), rr.aim, 5, 0.2, 1.8, true);
+      if (!fl.dead && b.t % 120 === 0) needles(w, ...gun(fl), fl.aim, 3, 0.3, 1.6, 28, 3.2);
+      if (!fr.dead && b.t % 150 === 75) {
+        const a = fr.aim;
+        for (let k = 0; k < 5; k++) w.after(k * 6, () => !fr.dead && frost(w, fr.x, fr.y + 10, a, 1.9, 0.45));
+      }
+      // And it launches raiders from its flanks.
+      if (b.t % 300 === 299 && w.player.alive)
+        for (const side of [-1, 1]) w.spawn(ENEMIES.raider, b.x + side * 70, b.y, [2, 200, 15]).seen = true;
+    } else if (b.phase === 2) {
+      // Twin beams that close like scissors toward the middle, then open again: under it is safe, until
+      // the aimed shots come. Between the cuts, rings of frost.
+      const k = b.t % 240;
+      if (k === 20) b.beam = { t: 0, ang: SCISSOR_OPEN, twin: true };
+      if (b.beam) {
+        const beam = b.beam;
+        if (beam.t >= BEAM_AIM) {
+          const f = (beam.t - BEAM_AIM) / SCISSOR_FRAMES;
+          beam.ang = SCISSOR_OPEN - (SCISSOR_OPEN - SCISSOR_SHUT) * Math.sin(Math.PI * f);
+          if (beam.t === BEAM_AIM) sfx.beam();
+          w.shake = Math.max(w.shake, 2);
+          if (beamHits(w, c.x, c.y + 8, beam.ang) || beamHits(w, c.x, c.y + 8, -beam.ang)) w.hurt();
+        }
+        if (++beam.t >= BEAM_AIM + SCISSOR_FRAMES) b.beam = null;
+        if (beam.t > BEAM_AIM && beam.t % 40 === 0) aimed(w, c.x, c.y + 10, 1, 0, 2.2);
+      } else if (b.t % 30 === 0) {
+        b.spin += 0.23;
+        for (let k = 0; k < 6; k++) frost(w, c.x, c.y, b.spin + (k * Math.PI) / 3, 1.3, 0.3);
+      }
+    } else {
+      // Last stand: it charges an all-out beam. Hurt the core enough while it charges to break it,
+      // or have a bomb ready.
+      b.beam = null;
+      if (b.stun > 0) {
+        b.stun--;
+        return;
+      }
+      if (b.mega > 0) {
+        if (--b.mega % 4 === 0) w.shake = Math.max(w.shake, 6);
+        w.hurt();
+        return;
+      }
+      if (b.charge) {
+        const ch = b.charge;
+        if (c.hp < ch.hp - b.coreMax * CHARGE_BREAK) {
+          b.charge = null;
+          b.stun = 100;
+          w.blast(c.x, c.y, true, true);
+          w.popup(c.x, c.y + 24, 'BROKEN');
+          w.addScore(20000);
+          return;
+        }
+        if (++ch.t % 30 === 0) sfx.warning();
+        if (ch.t >= CHARGE_FRAMES) {
+          b.charge = null;
+          b.mega = MEGA_FRAMES;
+          w.whiteout = 8;
+          sfx.beam();
+        }
+        return;
+      }
+      if (b.t % 420 === 260) {
+        b.charge = { t: 0, hp: c.hp };
+        w.bullets = w.bullets.filter((x) => x.y > c.y + 60);
+        return;
+      }
+      // Between charges: a spiral of needles and frost, turning both ways.
+      if (b.t % 9 === 0 && canFire(w, c.x, c.y)) {
+        b.spin += 0.37;
+        needle(w, c.x, c.y, b.spin, 2, 24, 2.3, false);
+        frost(w, c.x, c.y, -b.spin + Math.PI, 1.4, 0.35);
+      }
+      if (b.t % 80 === 40) aimed(w, c.x, c.y + 10, 5, 0.16, 2.4, true);
+    }
+  },
+};
+
+/** The scissor beams: how wide they start, how close they close, and for how long they burn. */
+const SCISSOR_OPEN = 1.0;
+const SCISSOR_SHUT = 0.16;
+const SCISSOR_FRAMES = 130;

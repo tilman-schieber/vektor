@@ -15,6 +15,8 @@ export interface Bullet {
   dead: boolean;
   /** A lava bomb: at this age it bursts into a ring. */
   burst?: number;
+  /** A dropped bomb: bursts into this many instead (a cross of 4), and is drawn as a bomb. */
+  burstN?: number;
   /** A flame: gone at this age. */
   life?: number;
   /** A needle: coasts to a stop, hangs in the air until this age, then streaks off along `ang`. */
@@ -126,4 +128,10 @@ export function stepFrost(b: Bullet) {
   const a = b.ang! + b.weave! * Math.sin(((b.t / WEAVE_PERIOD) * 2 + (b.phase ?? 0)) * Math.PI);
   b.vx = Math.sin(a) * b.spd!;
   b.vy = Math.cos(a) * b.spd!;
+}
+
+/** A bomb dropped from a bay: falls slowly, then after `fuse` frames bursts into a cross of four. */
+export function bomb(w: World, x: number, y: number, fuse: number) {
+  if (!canFire(w, x, y)) return;
+  w.bullets.push({ x, y, vx: 0, vy: 1.1 * w.bulletSpeed, r: 3, big: true, t: 0, dead: false, burst: fuse, burstN: 4 });
 }
