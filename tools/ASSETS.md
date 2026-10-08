@@ -391,3 +391,51 @@ Other features: 4 purple engine nozzles at the top (y≈3-12, x≈40, 64, 112, 1
 Unused but good alternatives, still in the grid B review object f434e104…: skylights with cyan glass (60-63), cargo racks (57-58), plain docking ring (52).
 
 Lessons: (1) Space terrains confuse the tileset model: with enhance on, "nebula" turned into black, and even with enhance off the model can swap which terrain is lower and upper. Check the all-lower/all-upper tiles (not only the example), and if they are swapped, generate again with both base tile ids passed the right way round. (2) Turning enhance off and raising text_guidance to 12 gave texture where enhance had made a flat colour (asteroid rock). (3) A 1-direction object grid with a style image keeps the style image's *content* size: a 26px rock padded to 48 gave only 26px rocks. For a bigger version of an existing sprite, use pixflux img2img on an enlarged copy at strength ~100. (4) The boss sketch method from stage 5 (opaque grey background, strength 170, then flood-fill) worked first time. A sketch drawn symmetric about a whole pixel column (x=88) made the mirror step trivial. (5) Mixed 64-item grids are very cheap here (10 generations each).
+
+---
+
+# Mid-bosses (all stages)
+
+Generations spent: 40 (balance went from 827 to 787). Files live in `src/assets/mid/`. All are RGBA with no partial alpha, face DOWN (south), and use no resampling. Layout sketches, previews and mock-ups on the stage tiles were made with PIL in the session scratchpad and are not kept in the repo. Coordinates below are **offsets from the sprite centre (w/2, h/2) in continuous canvas units** (+x right, +y down). Pixel index i covers i..i+1, so its centre is i+0.5.
+
+## Segmented creatures (two 64-candidate create_1_direction_object grids, no style ref, tag `mid_bosses`)
+
+Head grid: review 0ad9a3b4… at 40px (15 generations). Description: "giant monster creature head seen from directly above, top-down, facing down toward the bottom of the image, symmetrical, black outline, medium shading, arcade shmup boss part". Items: 8 + 8 + 16 sandworm variants (round maw / lamprey mouth / mandibles), then 8 + 8 + 16 lava serpent variants (dragon head / wide magma snake / open-jawed fire dragon).
+Body grid: review 73ff60ee… at 32px (10 generations). Description: "round armoured body segment of a giant monster seen from directly above, top-down, symmetrical, black outline, medium shading, arcade shmup boss part". Items: 8 + 8 + 16 worm segments (ridged plates / spiked ridge / curved bands), then 8 + 8 + 16 serpent segments (cracked basalt / molten centre seam / scales with spikes).
+Cleanup: alpha binarized, 8-connected clusters under 4px dropped, and an integer-shift re-centre.
+
+| path | source | size | notes |
+|---|---|---|---|
+| mid/worm_head.png | head grid frame 1 → object ee0c70f7-7203-4fa5-b7d2-c497aec91179 | 40x40 | A round head of horizontal orange-brown armour bands, with a wide round red maw ringed by teeth on the lower half (opening toward the bottom). bbox x2-37, y1-38. Alternative: frame 3 (spiky crown, brighter orange lips) → cddcb915-0978-4621-8f01-979e1dbdbb15. |
+| mid/worm_body.png | body grid frame 24 → object 0e6e8dfc-e9bd-4a40-a4e8-27d0f58ff730 | 32x32 | A tan sphere with dark-brown horizontal plate bands. It fills the whole 32x32 canvas and is mirror-symmetric left/right. Alternative: frame 3 (concentric rings, closer to the head's orange-brown) → bcae13f3-9382-468c-91ab-d0fd180f3778. |
+| mid/serpent_head.png | head grid frame 41 → object c1666cec-119f-40ae-bcce-e61648b185e6 | 40x40 | A wide black basalt snake head with an orange crack network, a dotted orange dorsal ridge, two glowing yellow eyes, and a glowing mouth/snout at the bottom. bbox x2-37, y1-37. Alternative: frame 46 (with a fiery horn) → de2b063c-22ba-4fbb-acd7-0fd891076917. |
+| mid/serpent_body.png | body grid frame 34 → object d2de4d0f-226b-4a54-b3d8-6e0c73159b82 | 32x32 | A round cluster of dark basalt scales with glowing orange/yellow cracks between them. It fills the 32x32 canvas. Alternative: frame 37 → 834080a9-fbb9-48fb-9126-8dce21be963e. |
+
+## Ships and aircraft (create_image_pixflux img2img on PIL sketches; south, high top-down, single color black outline, highly detailed, no_background false)
+
+Each sketch was drawn on a flat (128,128,128) grey background. The grey was then flood-filled away from the edges (tolerance 14), clusters under 5px were dropped, and the canvas size was kept.
+
+| path | prompt | init / strength | seed | size | id | notes |
+|---|---|---|---|---|---|---|
+| mid/submarine.png | "top-down view of a dark grey-blue military nuclear submarine seen from directly above, bow pointing down, long narrow cigar hull, conning tower sail with diving planes near the middle, a double row of missile hatches with orange and red markings, red stripe accents, torpedo tubes at the bow, rudder fins at the stern, panel lines, symmetrical, arcade shmup enemy, plain grey background" (medium shading) | sketch (hull, stern planes, 2x5 hatches, sail, red stripes, tubes) / **200** | 103 | 40x96 | job dc9e443a-e4c6-4a93-a086-665c19854668 | The stern tapers to a point at the top and the bow is rounded at the bottom. Non-outline pixels were brightened ×1.15+6. The generated bow had no visible tubes, so two 2x3 torpedo tube slots with orange glints were hand-drawn (px x15-16 and x23-24, y86-88). Seeds 101 (strength 170) and 102 (110) were flatter or lost the layout. |
+| mid/icebreaker.png | "top-down view of an armed arctic icebreaker warship seen from directly above, bow pointing down, red hull sides with navy deck, thick reinforced bow encrusted with white and light blue ice, white bridge superstructure in the middle with windows and a red funnel, two round gun turret bases without barrels on the centre line one fore one aft, panel lines, symmetrical, arcade shmup enemy, plain grey background" (detailed shading) | second sketch (tapered spoon bow, ice crust along the bow edges, stepped white bridge, shaded turret domes, orange lifeboats) / **170** | 204 | 56x112 | job e3e48b03-bd2a-40f8-bdd3-3639e38449ef | Close to the sketch, with a white/ice-blue crust on the bow and red streaks. The turrets are grey ring bases with a dark socket. The first sketch (blunt bow; seeds 201/202/203 at 170/130/150) gave a stubby barge, and seed 205 (strength 120) turned the turrets into odd posts. Alpha is symmetric to within 29px. |
+| mid/chopper.png | "top-down view of a heavy armoured attack helicopter gunship seen from directly above, nose pointing down, no rotor blades, round rotor hub in the centre, tandem glass cockpit canopy at the bottom, chin minigun under the nose, short stub wings with large rocket pods on both sides, long tail boom pointing up with tail stabiliser, dark gunmetal grey armor plates, glowing orange and yellow warning lights, panel lines, rivets, symmetrical, arcade shmup enemy, plain grey background" (medium shading) | sketch / **130** | 302 | 80x80 | job 67c1cbe9-69b0-4548-a043-29a3fba049df | Non-outline pixels were brightened ×1.25+6 for the dark roofs. A round 9px rotor hub (black rim, shaded grey, dark centre with an orange pixel) was hand-drawn at px (39.5,36.5). Orange lights were added at the stabiliser tips and a red light at the tail top. There are no rotor blades. Seed 301 (170) was thinner and bluer; seed 303 (img2img on 302 at 170) was bulkier. |
+| mid/frigate.png | "top-down view of an alien enemy space frigate seen from directly above, facing down, compact angular armored hull covered in many panel lines, armor plate seams, rivets and vents, dark violet-grey metal, thin glowing cyan lines, big round glowing cyan shield generator dome in the centre, two gun ports with glowing magenta muzzles at the front bottom, two purple glowing engine nozzles at the top, symmetrical, arcade shmup enemy, plain grey background" (detailed shading) | img2img on seed 402's output (itself sketch @130) / **140** | 403 | 112x80 | job 84b0c791-3d19-4bdf-b0b8-8644c80c1f58 | An angular violet-grey hull with side armour blocks, cyan seam lines and a big cyan glass dome. Two gun-port housings at the bottom have purple/magenta muzzles. Alpha is exactly symmetric about px x=55.5. Seed 401 (sketch @170) was flatter, and seed 404 (110) became a rounded blob. |
+
+## Coordinates (offset from the sprite centre)
+
+| sprite | point | offset | notes |
+|---|---|---|---|
+| submarine (40x96, centre 20,48) | conning tower (sail) | (0,+11) | Sail px y50-67, x15-22. Diving planes span x12-26 at y55-58. |
+| | torpedo tubes | (-4,+39.5) and (+4,+39.5) | Bow tip at (0,+47). |
+| | missile hatches | 2 columns at x≈-5/+5, 5 rows from y≈-28 to -4 | Orange/red squares. Could serve as missile launch points. |
+| icebreaker (56x112, centre 28,56) | aft turret | (0,-31.5) | Ring outer radius ≈8, dark socket radius ≈3.5. |
+| | fore turret | (0,+24.5) | |
+| | bow tip | (0,+53) | The bridge spans y≈-18..+11. |
+| chopper (80x80, centre 40,40) | rotor hub | (0,-3) | Hub radius 4.7. |
+| | rocket pods | (-26,+6.5) and (+26,+6.5) | Each pod is 12x23px; the front (bottom) end is at y≈+18. |
+| | minigun tip | (0,+38) | |
+| frigate (112x80, centre 56,40) | shield dome | (0,-3.5) | Radius ≈13.5 (px x42-69, y23-49). |
+| | gun ports (muzzle) | (-9.5,+34) and (+9.5,+34) | The housing tips are at y=+38. |
+
+Lessons: (1) A stern that tapers to a point reads as "bow up" in a sketch, but the model kept the real submarine shape (pointed stern, round bow), which is correct. (2) For ships the bow shape in the sketch matters most: a blunt sketch bow gave a barge at every strength, while a tapered spoon bow with pre-drawn ice crust worked first time at 170. (3) img2img on an earlier pixflux output (strength ~140 via `init_image_url` = job download URL) adds detail and keeps the composition, which is cheap at 1 generation per try. (4) The creature grids (no style ref, 32 items per creature in 3 sub-prompts) gave many usable heads and bodies. Per-item prompts that say "opening at the bottom" / "snout pointing down" all came out facing down, so no flips were needed.
