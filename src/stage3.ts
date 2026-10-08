@@ -85,7 +85,7 @@ const WAVES: Wave[] = [
   { at: 3440, run: both(sweep(false, 70, 8), swarm(120, 8)) },
   { at: 3560, run: both(pillbox(60), pillbox(180)) },
   { at: 3640, run: both(gun(60, 70), gun(180, 70)) },
-  { at: 3780, run: cargo(100, 'medal') },
+  { at: 3780, run: cargo(100) },
   { at: 3860, run: both(heavy(70), heavy(170)) },
   { at: 3980, run: both(battery(80), battery(160), scramble(3)) },
   // The anchorage.

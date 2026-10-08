@@ -101,11 +101,11 @@ const WAVES: Wave[] = [
   { at: 3260, run: swarm(80, 8) },
   { at: 3300, run: swarm(160, 8) },
   // The crater fortress.
-  { at: 3440, run: cargo(160, 'medal') },
+  { at: 3440, run: cargo(160) },
   { at: 3520, run: silos(40, 120, 200) },
   { at: 3660, run: both(heavy(120), scramble(3)) },
   { at: 3800, run: both(silos(60, 180), cross(3)) },
-  { at: 3940, run: cargo(100, 'medal') },
+  { at: 3940, run: cargo(100, 'missile') },
   { at: 4040, run: both(chopper(40, 80), chopper(200, 110), dive(120, 5)) },
   { at: 4180, run: both(gun(70, 70), gun(170, 70)) },
   { at: 4320, run: silos(40, 200) },

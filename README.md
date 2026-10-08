@@ -10,7 +10,7 @@ Easy mode (MODE on the title screen) gives the ship a shield that takes the firs
 
 ## Weapons and items
 
-Carriers drop items when shot down. The weapon orb changes colour while it floats around: catch your own colour to power up, the other one to switch.
+Carriers drop items when shot down. The weapon orb changes colour while it floats around: every orb powers up, and catching the other colour also switches weapon, keeping your level.
 
 | Item | What it does |
 | --- | --- |

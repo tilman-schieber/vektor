@@ -593,10 +593,12 @@ export class World {
     const said = (text: string) => this.popup(p.x, p.y - 22, text);
     const lv = (n: number, max: number) => (n >= max ? 'MAX' : String(n));
     if (it.kind === 'weapon') {
+      // Either colour powers up; the other one also switches weapon, keeping the level.
       const face = World.weaponFace(it);
-      if (face !== p.weapon) p.weapon = face;
-      else if (p.level < MAX_LEVEL) p.level++;
-      else return bonus('5000');
+      const switched = face !== p.weapon;
+      p.weapon = face;
+      if (p.level < MAX_LEVEL) p.level++;
+      else if (!switched) return bonus('5000');
       said(`${face === 'vulcan' ? 'VULCAN' : 'LASER'} ${lv(p.level, MAX_LEVEL)}`);
     } else if (it.kind === 'missile') {
       if (p.missiles < MAX_MISSILES) p.missiles++;
