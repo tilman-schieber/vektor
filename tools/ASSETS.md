@@ -317,3 +317,77 @@ Grid description: "flat ground prop on a grey volcanic ash plain seen from direc
 Unused but good alternatives in the grid: lava pools (52-55) and ash dunes (56-59). The dunes have low contrast on the ash.
 
 Lessons: (1) For a big opaque boss, use img2img with `no_background: false` on a sketch whose background is a flat grey, then flood-fill and polygon-mask the background away. With `no_background: true`, large flat deck areas were made transparent. (2) With a detailed, already shaded sketch, strength ~170 kept the layout and added texture. A plain sketch needs ~60. (3) Chained tileset base ids are returned immediately on creation, but chaining was only started after the previous sheet completed.
+
+---
+
+# Stage 6: Orbit (space: nebula, asteroid field, space station)
+
+Generations spent: 65 (balance went from 892 to 827). Palette: black space, blue-violet nebula, dark grey rock, white/light-grey station metal with blue lights; enemies in white/grey with red (raider), black/purple with cyan (stealth), grey-brown rock (asteroids), and a dark violet-grey mothership with purple and cyan glows. Layout sketches and previews were made with PIL in the session scratchpad and are not kept in the repo. All sprites are RGBA with no partial alpha. Re-centring uses integer shifts only, and flips are mirror-only.
+
+## Tilesets (create_topdown_tileset, 16px, high top-down, single color outline, medium shading, standard mode)
+
+Levels: 0 space, 1 nebula, 2 asteroid rock, 3 station hull.
+
+| file | tileset id | lower → upper | transition | notes |
+|---|---|---|---|---|
+| tiles/space_nebula.png/.json/_example.png | d855d71a-6f44-4d42-8651-922633127aa6 | "black outer space with scattered small white and pale blue stars" (lower_base 6226561d…) → "dense bright purple and teal nebula gas clouds, swirling violet and cyan glowing cosmic dust" (upper_base 1b838527…) | "wispy thin purple gas tendrils fading into black space", **round**, 0.5, enhance false, text_guidance 10, medium detail | Blue-violet gas field with a soft brighter rim; the space tile has a few blue star pixels (they repeat every tile, so the game's own starfield should do the real work). The nebula reads as slightly raised. Teal is only in sparse specks. See the lesson about swapped terrains below. |
+| tiles/nebula_rock.png/.json/_example.png | 78236b8a-beec-4721-b67b-47faa1e11116 | nebula (lower_base 1b838527…) → "rough dark grey asteroid rock surface covered in many small round impact craters, cracks and pebbles, cratered moon rock" | "jagged dark grey rocky cliff edge of the asteroid with scattered rock debris, irregular organic edge", **round**, 0.5, enhance false, text_guidance 12, highly detailed | Dark grey pitted rock, raised over the nebula with a dark cliff face. Rejected: f2b3d263-7a59-4d66-8edd-40fb4b15ea12 (same idea with enhance on: perfectly flat grey rock) and a1908238-bc4c-49e6-a361-0cc77e4ef459 ("brown-grey cratered asteroid rock ground…": nice cracked texture, but brown-pink rather than grey). |
+| tiles/rock_hull.png/.json/_example.png | 26fae35b-31fc-446d-a48b-ad8c7b6efdd2 | rock (lower_base 7c9996fc…) → "space station hull, light grey and white metal plating panels with panel seams, rivets and small glowing blue lights" | "heavy steel station hull wall edge with glowing blue light strips and seams", **square**, 0.25, text_guidance 10, medium detail | Very light white/grey plate panels with blue light pixels, inside a steel rim with cyan light strips. |
+
+Base tile ids:
+- space: `6226561d-b09a-49fe-8e56-e0931e3293bd`
+- nebula (upper of space_nebula, lower of nebula_rock): `1b838527-c0b8-46fd-bcdb-41cda04e4f06`. The two copies differ by at most 14 per channel (stage 1 accepted 13).
+- asteroid rock (upper of nebula_rock, lower of rock_hull): `7c9996fc-13aa-4b46-8e2a-1b19e8fcc774`. Max diff 1.
+- station hull: `2918d8c6-74ba-4cbd-afa8-c7c0ea779ea9`
+
+Rejected space→nebula attempts: 07614f2a-432c-434a-84cc-fc094d4dc52a (enhance on: the all-nebula tile came out pure black, the "nebula" was only a purple rim), 34a4e5df-072c-451a-a276-ef0c790ea77f (no shape_style: blocky purple platforms), c08200a8-37db-4d2e-9ac4-76df8b01d8d3 (good art, but the model drew the space as the *upper* and the nebula as the *lower* terrain). The final sheet re-used c08200a8's two base tiles the right way round (lower_base = its black star tile 6226561d, upper_base = its purple tile 1b838527), which forced the correct assignment.
+
+## Enemies
+
+Two create_1_direction_object grids (10 generations each): grid A at 24px (style ref = enemies/fighter.png, review ca13472c…, tag `orbit_enemies`) with 14 raider, 14 stealth, 12 mine, 12 small/mid asteroid and 12 more fighter items; grid B at 32px (style ref = enemies/carrier.png, review f434e104…, tag `orbit_enemies`) with 12 satellite, 12 gravity drone, 8 hangar hatch, 8 asteroid and 24 station-prop items (antenna, solar array, radar dish, docking ring, cargo pods, skylight). The cleanup drops 8-connected clusters of 3px or less and re-centres by integer shift.
+
+| path | source | size | notes |
+|---|---|---|---|
+| enemies/raider.png | grid A frame 1 → de42fb0d-26df-476b-a51b-1603db97adc6 ("small space raider fighter ship … nose pointing down, white and light grey hull with red accent stripes, short swept wings, twin engine glow at the top") | 24x24 | Already nose down, with red/orange twin engine glows at the top. bbox 18x21 at (3,1). Alternative: frame 9 (blue engines) → 4cc3061d…. |
+| enemies/stealth.png | grid A frame 15 → 11351b98-cad9-4ed0-ba9d-f133c63b3027 ("sleek dark angular stealth fighter … sharp delta flying wing … matte black and dark purple faceted hull, thin glowing cyan lines along the edges") | 24x24 | Drawn nose-up, flipped vertically. A near-black delta whose cyan edge lines are what you see against space (on purpose). bbox 22x19 at (1,2). Alternative: frame 63 → 74ea9e40…. |
+| enemies/mine.png | grid A frame 36 → c3e64031-9360-48fe-8e56-e0931e3293bd ("small naval sea mine floating in space … dark red and black ball with eight short spikes, bright glowing red light dot in the middle") | 16x16 | The candidate was 16x17, so the single outline pixel at the tip of the top and bottom spikes was removed. bbox 16x15 at (0,0); the glowing centre is at (7.5,7.5). |
+| enemies/asteroid_small.png | grid A frame 44 → 62a22f2f-772a-4b50-ab14-d7b7e6cb90d5 | 16x16 | Round grey-brown rock with three craters, bbox 14x15 at (1,0). |
+| enemies/asteroid_mid.png | grid B frame 36 → 603bad82-b378-41e7-a216-c82c65f006d4 | 32x32 | bbox 26x26 at (3,3). |
+| enemies/asteroid_big.png | create_image_pixflux img2img, init = asteroid_mid's rock enlarged to 42px (bilinear, only as the init image), init_image_strength 100, no_background true, seed 611, job 7fb43388-de20-40fc-8c06-5734e3278340: "big grey brown rocky asteroid seen from directly above, roughly round lumpy space rock with several round impact craters and cracks, top lit" | 48x48 | Round, top-lit, a bit creamier than the mid rock, and its craters read as small bumps. bbox 42x42 at (3,3). A 16-candidate 48px object grid with the mid asteroid as style ref (e418e76d…, dismissed) only gave 26px rocks (the style image's content size wins); seed 612 (text-only with a forced palette) had no outline. |
+| enemies/satellite.png | grid B frame 0 → d1bea8ad-bb43-4965-b26d-f3cb5edd3e1d ("armed satellite defence node … square dark metal core with a glowing cyan emitter lens in the centre, two blue solar panel wings extending left and right, symmetrical") | 32x32 | bbox 30x16 at (1,8). Emitter centre ≈ **(16,14.5)**, which is where the laser fence should attach. Alternatives in grid B: red emitter (4-7), magenta orb (8-11). |
+| enemies/gravity.png | grid B frame 12 → 2bc2e11b-7497-417b-858a-1bf25ba9d9ea ("round hovering drone … dark metal ring hull around a swirling dark violet gravity vortex lens core, purple glow, spiral pattern") | 32x32 | A dark rim around a purple spiral with a black eye. bbox 22x23 at (5,4), centre ≈ (16,15.5). Alternative: frame 20 (brighter magenta swirl) → f0c0f71d…. |
+| enemies/hangar_closed.png | grid B frame 31 → eda375ae-c6b1-4eec-976e-fb16913b6640 ("closed square hangar bay door on a white grey metal space station deck … heavy armour plates split down the middle, small blue lights in the corners") | 32x32 | Fills the whole canvas. The doors are the inner panel inside the outline at x6-25, y6-25 (two halves meeting at x≈15). Centre (15.5,15.5). Alternative: frame 27 → 50deb92c…. |
+| enemies/hangar_open.png | inpaint_image on hangar_closed.png, mask x7 y7 w18 h18, seed 7, job e7556382-a6ae-4a9a-8076-d0bf942aeb44: "the two armored hangar doors slid fully open to the left and right sides, revealing a deep dark open launch bay pit inside, black shadow interior with small glowing orange warning lights along the edges, top-down view" | 32x32 | A dark shaft that gets deeper towards the centre, with orange lights around the rim. Only the 18x18 mask box was pasted onto the closed hatch (the inpaint had changed some pixels outside the mask by a few levels), so the frame is pixel-identical. Launch point = centre (15.5,15.5). |
+
+## Boss
+
+| path | tool | prompt | seed | size | id | notes |
+|---|---|---|---|---|---|---|
+| boss/boss6.png | create_image_pixflux img2img (init = shaded PIL sketch on a flat grey (128,128,128) background: a wide hull tapering to a prow at the bottom, 4 engine nozzles at the top, 4 round turret pods with short barrels, a raised centre spine, a cyan-ringed round hatch, cyan window dots and purple edge stripes; **init_image_strength 170**, no_background false, detailed shading, highly detailed, direction south) | "top-down view of a giant alien enemy mothership boss seen from directly above, facing down, massive dark violet-grey armored hull, four round armored weapon battery turret pods two on each side, central round closed armored hatch over the core in the middle with glowing cyan ring, glowing purple engine nozzles at the top, rows of glowing cyan windows, purple neon accent lines, panel lines, rivets, vents, symmetrical, arcade shmup final boss" | 601 | 176x144 | job af035e74-1192-401a-9bea-7621e91d792f | Post-processing: the grey background was flood-filled away from the edges (tolerance 14), then the left half was mirrored onto the right about **pixel column x=88** (the output was already symmetric about it). bbox x7-169, y2-139. Pods became plain round turrets with a glowing purple centre (no barrels). Seed 602 (strength 120) was cleaner but flatter, with a plain hatch. |
+| boss/boss6_open.png | inpaint_image on the raw pixflux output (job URL), mask x69 y47 w39 h39 | "the round armored hatch doors slid open, revealing a round glowing alien energy core inside, bright white-cyan hot center surrounded by glowing magenta and purple energy rings, dark metal frame around the open pit, top-down view" | 7 | 176x144 | job b9241aca-2075-4c8e-b9dc-ddbf5d2f9399 | Only the disc with r ≤ 19.5 around (88,66) was pasted onto boss6.png and mirrored about x=88, so the cyan hatch ring and everything else stay identical. RGB difference confined to x69-107, y47-84. |
+
+**boss6 coordinates.** "Centre" is the canvas centre (88,72), i.e. (w/2, h/2). The sprite's own symmetry axis is x=88.
+
+| point | from top-left | from centre (88,72) | notes |
+|---|---|---|---|
+| battery pod, upper left | (26,52) | (-62,-20) | pod disc radius ≈ 15 |
+| battery pod, upper right | (150,52) | (+62,-20) | |
+| battery pod, lower left | (48,96) | (-40,+24) | |
+| battery pod, lower right | (128,96) | (+40,+24) | |
+| core / hatch | (88,66) | (0,-6) | The cyan hatch ring has radius ≈ 21 (x67-109, y45-87). In the open sprite the white-cyan core blob spans x82-94, y60-72. |
+
+Other features: 4 purple engine nozzles at the top (y≈3-12, x≈40, 64, 112, 136); a cyan prow light at (88,133).
+
+## Decor (station-hull props, 32x32, from grid B; tag `orbit_enemies`)
+
+| path | frame | object id | notes |
+|---|---|---|---|
+| decor/orbit_antenna.png | 40 | f045f266-f7ad-448e-b11e-be2218221c05 | A thin white mast with a small dish and red lights (bbox 11x30). The weakest read: it is narrow and seen side-on. |
+| decor/orbit_solar.png | 45 | 7504e382-230e-4d7e-9fe1-6c6a5849f44e | Four dark-blue solar panels in a grey frame. |
+| decor/orbit_radar.png | 49 | 57422f5a-ef3b-4d23-8c57-03c62cceb3a7 | A white dish on a small base, in a slight 3/4 view. |
+| decor/orbit_dock.png | 54 | b0cd1551-188f-4067-bda9-a23b5aceb3d8 | A docking ring with blue lights; its centre is transparent, so the hull shows through. |
+| decor/orbit_cargo.png | 56 | 7b39d45d-cf63-42a6-80a0-0f82bb817279 | Three white cargo cylinders with orange bands. |
+
+Unused but good alternatives, still in the grid B review object f434e104…: skylights with cyan glass (60-63), cargo racks (57-58), plain docking ring (52).
+
+Lessons: (1) Space terrains confuse the tileset model: with enhance on, "nebula" turned into black, and even with enhance off the model can swap which terrain is lower and upper. Check the all-lower/all-upper tiles (not only the example), and if they are swapped, generate again with both base tile ids passed the right way round. (2) Turning enhance off and raising text_guidance to 12 gave texture where enhance had made a flat colour (asteroid rock). (3) A 1-direction object grid with a style image keeps the style image's *content* size: a 26px rock padded to 48 gave only 26px rocks. For a bigger version of an existing sprite, use pixflux img2img on an enlarged copy at strength ~100. (4) The boss sketch method from stage 5 (opaque grey background, strength 170, then flood-fill) worked first time. A sketch drawn symmetric about a whole pixel column (x=88) made the mirror step trivial. (5) Mixed 64-item grids are very cheap here (10 generations each).
