@@ -1,6 +1,7 @@
 // Stage 4: a ruined city at night. Over the outskirts and downtown, across the river, past the
 // power plant and up the boulevard, where the walker comes stomping.
 import { Stage, Wave, dive, sweep, swoop, gun, cargo, tanks, scramble, heavy, swarm, chopper, hatch, loops, cross, both } from './stage';
+import { gunChopper } from './mid';
 import { COLS, TILE, noise, Terrain } from './terrain';
 import { WALKER } from './boss';
 import { ENEMIES } from './enemies';
@@ -96,6 +97,8 @@ const train = (cars: number, speed = 0.45) => (w: World) => {
 };
 
 const WAVES: Wave[] = [
+  // Downtown, a heavy attack helicopter.
+  { at: 2040, run: gunChopper() },
   // The outskirts.
   { at: 60, run: chopper(170, 70) },
   { at: 160, run: dive(60, 5) },
@@ -117,10 +120,7 @@ const WAVES: Wave[] = [
   { at: 1780, run: both(hatches(40, 200), chopper(120, 60)) },
   { at: 1900, run: train(5, 0.55) },
   // The river.
-  { at: 2060, run: both(dive(150, 5), dive(210, 5)) },
-  { at: 2180, run: both(chopper(40, 80), chopper(200, 80)) },
   { at: 2300, run: cargo(150) },
-  { at: 2400, run: both(gun(110, 60), scramble(3)) },
   // The power plant.
   { at: 2560, run: both(tanks(160, 3), tanks(220, 3)) },
   { at: 2660, run: train(4) },
@@ -141,7 +141,6 @@ const WAVES: Wave[] = [
   // More variety: helicopters, aerobatics, hatches.
   { at: 540, run: loops(60, 4, 120) },
   { at: 1600, run: cross(3) },
-  { at: 2480, run: loops(180, 5, 110) },
   { at: 3700, run: cross(3) },
 ];
 

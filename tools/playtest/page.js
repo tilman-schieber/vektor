@@ -12,10 +12,10 @@
   let run; // the run in progress
 
   async function init() {
-    const [world, rng, sprites, modes, boss, enemies] = await Promise.all([
-      import('/src/world.ts'), import('/src/rng.ts'), import('/src/sprites.ts'), import('/src/modes.ts'), import('/src/boss.ts'), import('/src/enemies.ts'),
+    const [world, rng, sprites, modes, boss, enemies, mid] = await Promise.all([
+      import('/src/world.ts'), import('/src/rng.ts'), import('/src/sprites.ts'), import('/src/modes.ts'), import('/src/boss.ts'), import('/src/enemies.ts'), import('/src/mid.ts'),
     ]);
-    M = { ...world, ...rng, has: sprites.has, MODES: modes.MODES, boss, enemies };
+    M = { ...world, ...rng, has: sprites.has, MODES: modes.MODES, boss, enemies, mid };
     for (let i = 0; i < 400 && !(window.game && window.sim && M.has('boss/boss')); i++) await new Promise((r) => setTimeout(r, 25));
     if (!window.sim) throw new Error('no window.sim: not a dev build?');
     window.sim(0); // freezes the live loop; we step the game ourselves from here on
@@ -197,6 +197,16 @@
           return d < M.boss.MORTAR_R + 10 && t <= left ? 15 : 0;
         });
       }
+    }
+    // A sandworm's mound: it bursts out of it soon. A player keeps off it.
+    for (const e of w.enemies) {
+      if (e.def.name !== 'wormHead' || !e.hidden) continue;
+      const left = M.mid.WORM_UNDER - (e.t % M.mid.WORM_CYCLE);
+      if (left > 50) continue;
+      out.push((x, y) => {
+        const d = Math.hypot(x - e.x, y - e.y);
+        return d < 30 ? 600 : d < 50 ? 40 : 0;
+      });
     }
     for (const e of w.enemies) {
       if (e.def.name !== 'satellite' || !e.link || e.link.dead || e.p[3] > Math.PI / 2) continue;

@@ -17,6 +17,8 @@ export interface Bullet {
   burst?: number;
   /** A dropped bomb: bursts into this many instead (a cross of 4), and is drawn as a bomb. */
   burstN?: number;
+  /** An ice bomb: bursts into frost shards. */
+  frosty?: boolean;
   /** A flame: gone at this age. */
   life?: number;
   /** A needle: coasts to a stop, hangs in the air until this age, then streaks off along `ang`. */
@@ -67,10 +69,12 @@ export function ring(w: World, x: number, y: number, n: number, speed: number, o
 
 /** A lava bomb lobbed at angle `ang`: after `fuse` frames it bursts into a ring of n. */
 export function lob(w: World, x: number, y: number, ang: number, speed: number, fuse: number) {
-  if (!canFire(w, x, y)) return;
+  if (!canFire(w, x, y)) return undefined;
   shoot(w, x, y, ang, speed, true);
-  w.bullets[w.bullets.length - 1].burst = fuse;
+  const b = w.bullets[w.bullets.length - 1];
+  b.burst = fuse;
   sfx.enemyShot();
+  return b;
 }
 
 /** A spurt of flame toward `ang`: fast, spread out, and burnt out after a short way. */

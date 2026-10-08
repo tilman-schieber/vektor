@@ -1,6 +1,7 @@
 // Stage 1: over the ocean, across the beach, up a jungle river, into the base. The flying
 // fortress waits at the end.
 import { Stage, Wave, dive, sweep, swoop, gun, cargo, tanks, pillbox, chopper, loops, cross, hatch, both } from './stage';
+import { sub } from './mid';
 import { COLS, noise } from './terrain';
 import { FORTRESS } from './boss';
 import { W } from './draw';
@@ -35,15 +36,13 @@ function profile(seed: number, x: number, j: number) {
 }
 
 const WAVES: Wave[] = [
+  // Halfway across the sea, a submarine comes up.
+  { at: 400, run: sub() },
   // Open sea.
   { at: 60, run: dive(60) },
   { at: 160, run: dive(180) },
   { at: 260, run: sweep(true, 80) },
   { at: 330, run: cargo(120) },
-  { at: 420, run: swoop(120, 140) },
-  { at: 520, run: sweep(false, 60) },
-  { at: 600, run: both(dive(40, 4), dive(200, 4)) },
-  { at: 700, run: gun(120) },
   { at: 860, run: swoop(70, 160) },
   { at: 900, run: swoop(170, 160) },
   // The coast.
@@ -87,7 +86,6 @@ const WAVES: Wave[] = [
   { at: 4300, run: both(swoop(80, 150), swoop(160, 150)) },
   { at: 4400, run: cargo(120, 'bomb') },
   // More variety: helicopters, aerobatics, hatches.
-  { at: 560, run: loops(60, 4, 110) },
   { at: 1120, run: chopper(200, 90) },
   { at: 1940, run: chopper(40, 80) },
   { at: 2340, run: cross(3) },

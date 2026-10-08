@@ -2,6 +2,7 @@
 // the defence ring with its laser fences, and the station built into an asteroid, where the
 // mothership waits.
 import { Stage, Wave, cargo, scramble, swarm, hatch, both } from './stage';
+import { shieldFrigate } from './mid';
 import type { World } from './world';
 import { ENEMIES } from './enemies';
 import { noise } from './terrain';
@@ -82,6 +83,8 @@ const fence = (cx: number, radius: number, a0 = 0, spin = 0.008): Run => (w) => 
 const hangars = (...xs: number[]): Run => (w) => xs.forEach((x, k) => void w.spawn(hangar, x, -18, [k * 70], 'medal'));
 
 const WAVES: Wave[] = [
+  // Between the debris field and the ring, a frigate behind its shield.
+  { at: 2420, run: shieldFrigate() },
   // Open space.
   { at: 60, run: dive(80) },
   { at: 150, run: dive(160) },
@@ -110,10 +113,6 @@ const WAVES: Wave[] = [
   { at: 2200, run: swarm(120, 10) },
   { at: 2320, run: shower(8, 3) },
   // The defence ring.
-  { at: 2460, run: fence(120, 50) },
-  { at: 2600, run: both(sweep(true, 60), sweep(false, 100)) },
-  { at: 2700, run: both(fence(70, 36, 0.4, 0.012), fence(170, 36, 1.2, -0.012)) },
-  { at: 2840, run: cloak(120, 100) },
   { at: 2920, run: fence(120, 90, 0, 0.006) },
   { at: 3020, run: cargo(160, 'bomb') },
   { at: 3100, run: both(mines(60, 180), well(120, 70)) },

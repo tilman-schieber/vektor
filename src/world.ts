@@ -1,7 +1,7 @@
 // The simulation: scrolling, the player, shots, enemies, bullets, items, bombs and the boss.
 import { W, H } from './draw';
 import { Enemy, EnemyDef, ItemKind, makeEnemy, gone } from './enemies';
-import { Bullet, ring, stepNeedle, stepFrost } from './bullets';
+import { Bullet, ring, stepNeedle, stepFrost, frost } from './bullets';
 import { Boss } from './boss';
 import { Terrain } from './terrain';
 import { STAGES } from './stages';
@@ -18,6 +18,8 @@ export const EXTENDS = [200000, 500000];
 const START_BOMBS = 3;
 /** Frames of the boss warning before the boss comes in. */
 export const WARNING_FRAMES = 200;
+/** Frames the caution card shows when a mid-boss comes in. */
+export const MID_CARD = 150;
 /** Easy mode: frames until a broken shield comes back. */
 export const SHIELD_REGEN = 20 * 60;
 
@@ -169,6 +171,9 @@ export class World {
   readonly shielded: boolean;
   /** Debug: nothing hurts the ship. */
   god = false;
+  /** The mid-boss on screen, if any, and frames left of its caution card. */
+  mid: Enemy | null = null;
+  midCard = 0;
 
   constructor(rng: Rng, lives: number, shielded = false) {
     this.rng = rng;
@@ -207,8 +212,14 @@ export class World {
     const e = makeEnemy(def, x, y, p);
     // One-hit enemies stay one-hit.
     if (def.hp > 1) e.hp = def.hp * this.toughness;
+    e.maxHp = e.hp;
     e.drop = drop;
     this.enemies.push(e);
+    if (def.mid) {
+      this.mid = e;
+      this.midCard = MID_CARD;
+      sfx.spotted();
+    }
     return e;
   }
 
@@ -235,6 +246,8 @@ export class World {
     this.wrecks = [];
     this.later = [];
     this.boss = null;
+    this.mid = null;
+    this.midCard = 0;
     this.misses = 0;
     this.state = 'play';
     this.stateTimer = 0;
@@ -484,6 +497,8 @@ export class World {
   // ---------- enemies ----------
 
   private updateEnemies() {
+    if (this.midCard > 0) this.midCard--;
+    if (this.mid?.dead) this.mid = null;
     for (const e of this.enemies) {
       if (e.dead) continue;
       e.def.update(e, this);
@@ -549,7 +564,8 @@ export class World {
     }
     this.bullets = this.bullets.filter((b) => !b.dead);
     for (const b of bursting) {
-      if (b.burstN) ring(this, b.x, b.y, b.burstN + (this.loop - 1) * 4, 1.5);
+      if (b.frosty) for (let k = 0; k < 6 + this.loop * 2; k++) frost(this, b.x, b.y, (k / (6 + this.loop * 2)) * Math.PI * 2 + b.t / 9, 1.2, 0.35);
+      else if (b.burstN) ring(this, b.x, b.y, b.burstN + (this.loop - 1) * 4, 1.5);
       else ring(this, b.x, b.y, 8 + this.loop * 2, 1.2, b.t / 9);
       this.particles.push({ x: b.x, y: b.y, vx: 0, vy: 0, life: 8, color: '#f8d838' });
     }
@@ -690,6 +706,12 @@ export class World {
     for (const s of this.shots) {
       for (const e of this.enemies) {
         if (e.dead || s.dead || e.hidden) continue;
+        // A shield stops the shot where it meets it.
+        if (e.def.blocks?.(e, s.x, s.y)) {
+          s.dead = true;
+          this.particles.push({ x: s.x, y: s.y, vx: 0, vy: -0.5, life: 6, color: '#78f8f8' });
+          continue;
+        }
         const half = s.kind === 'laser' ? s.width! / 2 : 2;
         const r = e.r ?? e.def.r;
         // Armour stops only what is really inside it; targets get a generous box.

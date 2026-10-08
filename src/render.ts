@@ -2,6 +2,7 @@ import { Game, MENU, MUSIC_NAMES, NAME_LEN, CARD_FRAMES, TALLY_AT } from './game
 import { World, Shot, Blast, Item, MAX_LEVEL, MAX_MISSILES, SHIELD_REGEN, WARNING_FRAMES } from './world';
 import { Enemy, DESTROYER_GUNS, LAVABOAT_GUN, popupOpen, magmaRise, siloOpen, hangarOpen, GRAVITY_R, STEALTH_SHOW } from './enemies';
 import { aimAt } from './bullets';
+import { SUB_CYCLE, SUB_UP, SUB_DOWN, ICEBREAKER_GUNS, CHOPPER_HUB, SHIELD_R, SHIELD_GAP, shieldGap } from './mid';
 import { Boss, walkerHead, LIGHT_SPREAD, BEAM_AIM, BEAM_LOCK, MORTAR_FUSE, MORTAR_R, CHARGE_FRAMES } from './boss';
 import { STAGES } from './stages';
 import { Terrain, TILE } from './terrain';
@@ -27,7 +28,7 @@ function drawShadow(ctx: Ctx, name: string, x: number, y: number, dist = 1) {
 function enemySprite(e: Enemy) {
   const name = e.def.sprite;
   if (e.flash > 0) return flash(name);
-  if (e.def.name === 'fighter' || e.def.name === 'raider' || e.def.name === 'interceptor' || e.def.name === 'rocket') return rotated(name, stepFor(e.vx, e.vy || 0.01));
+  if (['fighter', 'raider', 'interceptor', 'rocket', 'wormHead', 'wormBody', 'serpentHead', 'serpentBody'].includes(e.def.name)) return rotated(name, stepFor(e.vx, e.vy || 0.01));
   // Asteroids tumble, each its own way round.
   if (e.def.name === 'asteroid') return rotated(name, Math.floor(e.t / 7) * ((e.p[0] ?? 0) < 0 ? -1 : 1));
   return spr(name);
@@ -85,6 +86,32 @@ function drawGroundEnemy(ctx: Ctx, e: Enemy, w: World, frame: number) {
   if (e.def.name === 'lavaboat') {
     drawAt(ctx, enemySprite(e), e.x, e.y);
     drawBarrel(ctx, e.x, e.y + LAVABOAT_GUN, e.aim, 10);
+    return;
+  }
+  if (e.def.name === 'submarine') {
+    // Under water it shows as a dark shape; it rises and sinks through the surface, foaming.
+    const k = e.t % SUB_CYCLE;
+    const up = k < SUB_UP ? k / SUB_UP : k < SUB_DOWN ? 1 : Math.max(0, 1 - (k - SUB_DOWN) / 50);
+    ctx.save();
+    ctx.globalAlpha = 0.18 + 0.82 * up;
+    drawAt(ctx, enemySprite(e), e.x, e.y);
+    ctx.restore();
+    if (up > 0 && up < 1)
+      for (let i = 0; i < 10; i++) {
+        const h = hash(i * 31 + (frame >> 2));
+        ctx.fillStyle = i % 2 ? WHITE : '#a8d0f8';
+        ctx.fillRect(Math.round(e.x - 14 + (h % 28)), Math.round(e.y - 40 + ((h >>> 8) % 80)), 2, 1);
+      }
+    return;
+  }
+  if (e.def.name === 'icebreaker') {
+    // Broken ice churned up round the bow.
+    for (let k = 0; k < 8; k++) {
+      ctx.fillStyle = (frame + k * 5) % 10 < 5 ? WHITE : '#c8e8f8';
+      ctx.fillRect(Math.round(e.x) - 14 + ((k * 7 + (frame >> 2)) % 28), Math.round(e.y) + 46 + (k % 3) * 3, 2, 2);
+    }
+    drawAt(ctx, enemySprite(e), e.x, e.y);
+    for (const [gx, gy] of ICEBREAKER_GUNS) drawBarrel(ctx, e.x + gx, e.y + gy, aimAt(w, e.x + gx, e.y + gy), 12);
     return;
   }
   if (e.def.name === 'popup' || e.def.name === 'hangar') {
@@ -493,18 +520,34 @@ function drawAsh(ctx: Ctx, frame: number) {
 }
 
 /** Two blurred blades spinning over a helicopter's hub. */
-function drawRotor(ctx: Ctx, x: number, y: number, frame: number) {
+/** The frigate's shield: a flickering arc all round it but for the turning gap. */
+function drawFrigateShield(ctx: Ctx, e: Enemy, frame: number) {
+  const g = shieldGap(e);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  // Canvas angles run from +x; ours from straight down (+y).
+  const from = Math.PI / 2 - g + SHIELD_GAP, to = Math.PI / 2 - g - SHIELD_GAP + Math.PI * 2;
+  for (const [width, color] of [[6, 'rgba(60,188,252,0.25)'], [2, frame % 4 < 2 ? '#78f8f8' : '#3cbcfc']] as const) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, SHIELD_R, -to, -from);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+function drawRotor(ctx: Ctx, x: number, y: number, frame: number, size = 30) {
   const a = frame * 0.9;
   ctx.fillStyle = 'rgba(200,210,220,0.55)';
   for (const off of [0, Math.PI / 2]) {
     const dx = Math.cos(a + off), dy = Math.sin(a + off);
-    for (let k = -15; k <= 15; k++) ctx.fillRect(Math.round(x + dx * k), Math.round(y + dy * k), 1, 1);
+    for (let k = -size / 2; k <= size / 2; k++) ctx.fillRect(Math.round(x + dx * k), Math.round(y + dy * k), 1, 1);
   }
   ctx.fillStyle = '#202020';
   ctx.fillRect(Math.round(x) - 1, Math.round(y) - 1, 3, 3);
 }
 
-/** Searchlights on the ground, each a cone sweeping to and fro, anchored to the map as it scrolls. */
 /** Stars far behind the scenery, slower than it, twinkling: only over open space. */
 function drawStars(ctx: Ctx, w: World) {
   for (let i = 0; i < 90; i++) {
@@ -519,6 +562,7 @@ function drawStars(ctx: Ctx, w: World) {
   }
 }
 
+/** Searchlights on the ground, each a cone sweeping to and fro, anchored to the map as it scrolls. */
 function drawSearchlights(ctx: Ctx, w: World) {
   const SPACING = 13;
   const first = Math.floor(w.dist / TILE / SPACING) - 1;
@@ -575,8 +619,20 @@ function drawWorld(ctx: Ctx, w: World, frame: number) {
       drawStealth(ctx, e, frame);
       continue;
     }
+    if (e.hidden && (e.def.name === 'wormHead' || e.def.name === 'wormBody')) {
+      // Under the sand: a mound of churned sand where it crawls.
+      for (let k = 0; k < 4; k++) {
+        const h = hash(k * 13 + (frame >> 2) + Math.round(e.x));
+        disc(ctx, e.x - 6 + (h % 12), e.y - 4 + ((h >>> 8) % 8), e.def.name === 'wormHead' ? 5 : 3, k % 2 ? '#c8a060' : '#e0c080');
+      }
+      continue;
+    }
     drawAt(ctx, enemySprite(e), e.x, e.y);
     if (e.def.name === 'heli') drawRotor(ctx, e.x, e.y, w.frame);
+    if (e.def.name === 'attackChopper') {
+      drawRotor(ctx, e.x, e.y + CHOPPER_HUB, w.frame, 64);
+    }
+    if (e.def.name === 'frigate') drawFrigateShield(ctx, e, frame);
     if (e.def.name === 'rocket') {
       // Exhaust behind it.
       const len = Math.hypot(e.vx, e.vy) || 1;
@@ -639,6 +695,16 @@ function drawHud(ctx: Ctx, game: Game, w: World, frame: number) {
   drawStatus(ctx, w, frame);
   if (game.debug) drawTextShadow(ctx, w.god ? 'DEBUG GOD' : 'DEBUG', 4, 24, w.god ? YELLOW : GREY);
 
+  const m = w.mid;
+  if (m && !m.dead && !w.boss) {
+    // A mid-boss's health, in yellow.
+    ctx.fillStyle = '#000';
+    ctx.fillRect(59, 14, 122, 5);
+    ctx.fillStyle = DARK;
+    ctx.fillRect(60, 15, 120, 3);
+    ctx.fillStyle = m.flash ? WHITE : GOLD;
+    ctx.fillRect(60, 15, Math.ceil(120 * Math.max(0, m.hp / (m.maxHp ?? m.hp))), 3);
+  }
   if (w.boss && w.boss.dying < 0 && w.boss.phase > 0) {
     // Boss health: the pods, then the core.
     const b = w.boss;
@@ -731,6 +797,18 @@ function warningCard(ctx: Ctx, w: World, frame: number) {
   drawTextCentered(ctx, sub.slice(0, Math.floor((age - 30) / 4)).padEnd(sub.length, ' '), W / 2, 158, LIGHT);
 }
 
+/** A mid-boss coming in: a yellow band with CAUTION and its name. */
+function cautionCard(ctx: Ctx, w: World, frame: number) {
+  if (w.midCard <= 0 || !w.mid) return;
+  ctx.fillStyle = 'rgba(248,184,0,0.3)';
+  ctx.fillRect(0, 126, W, 36);
+  ctx.fillStyle = GOLD;
+  ctx.fillRect(0, 126, W, 1);
+  ctx.fillRect(0, 161, W, 1);
+  if ((frame >> 3) % 2 === 0) drawTextCentered(ctx, 'CAUTION', W / 2, 133, YELLOW);
+  drawTextCentered(ctx, w.mid.def.mid!, W / 2, 147, WHITE);
+}
+
 function drawPause(ctx: Ctx, w: World) {
   ctx.fillStyle = 'rgba(0,0,0,0.6)';
   ctx.fillRect(0, 0, W, H);
@@ -806,6 +884,7 @@ function renderPlay(ctx: Ctx, game: Game, frame: number) {
   drawHud(ctx, game, w, frame);
   stageCard(ctx, game, w, frame);
   warningCard(ctx, w, frame);
+  cautionCard(ctx, w, frame);
   if (game.phase === 'play' && game.paused) drawPause(ctx, w);
   if (game.phase === 'clear') drawClear(ctx, game, w);
   if (game.phase === 'ending') drawEnding(ctx, game, w);

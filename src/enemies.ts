@@ -30,8 +30,12 @@ export interface Enemy {
   hidden?: boolean;
   /** Has been on screen, so leaving it means it's gone. */
   seen: boolean;
-  /** The other end of a laser fence. */
+  /** The other end of a laser fence; for a segment, the head it follows. */
   link?: Enemy;
+  /** Health when it came in, for a health bar. */
+  maxHp?: number;
+  /** A head's recent path, as x, y, underground (1/0) triples, newest first: its segments follow it. */
+  trail?: number[];
 }
 
 export interface EnemyDef {
@@ -50,6 +54,10 @@ export interface EnemyDef {
   update(e: Enemy, w: World): void;
   /** Called when shot down, after the blast and the drop. */
   onDeath?(e: Enemy, w: World): void;
+  /** A mid-boss: its name for the caution card. It gets a health bar and stays until it leaves. */
+  mid?: string;
+  /** A shield: true if a player shot at (x, y) is stopped before it reaches the hull. */
+  blocks?(e: Enemy, x: number, y: number): boolean;
 }
 
 /** Extra shots in a volley: from stage 4 on, and on every later loop. */
@@ -686,5 +694,5 @@ export function makeEnemy(def: EnemyDef, x: number, y: number, p: number[] = [])
 export function gone(e: Enemy) {
   const m = 40;
   const out = e.x < -m || e.x > W + m || e.y < -m - 40 || e.y > H + m;
-  return (e.seen && out) || e.t > 60 * 30;
+  return (e.seen && out) || (e.t > 60 * 30 && !e.def.mid);
 }

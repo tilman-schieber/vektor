@@ -1,6 +1,7 @@
 // Stage 2: across the dunes, through the canyons of the mesas, over the refinery. The desert
 // crawler waits at the end.
-import { Stage, Wave, dive, sweep, swoop, gun, cargo, tanks, pillbox, battery, scramble, heavy, chopper, loops, cross, hatch, both } from './stage';
+import { Stage, Wave, dive, sweep, swoop, gun, cargo, tanks, pillbox, battery, scramble, heavy, chopper, cross, hatch, both } from './stage';
+import { worm } from './mid';
 import { COLS, TILE, noise } from './terrain';
 import { CRAWLER } from './boss';
 import { ENEMIES } from './enemies';
@@ -44,6 +45,8 @@ const canyonTanks = (n: number) => (w: World) => {
 };
 
 const WAVES: Wave[] = [
+  // In the dunes, a sandworm.
+  { at: 2000, run: worm() },
   // The dunes.
   { at: 60, run: dive(120, 5) },
   { at: 180, run: scramble(3) },
@@ -63,10 +66,6 @@ const WAVES: Wave[] = [
   { at: 1700, run: canyonTanks(5) },
   { at: 1780, run: both(battery(40), pillbox(200)) },
   { at: 1880, run: scramble(5, 50) },
-  { at: 2000, run: sweep(false, 90, 8) },
-  { at: 2080, run: heavy(70) },
-  { at: 2100, run: heavy(170, 'bomb') },
-  { at: 2300, run: both(battery(60), battery(180), canyonTanks(3)) },
   { at: 2420, run: cargo(60) },
   { at: 2520, run: both(swoop(120, 170), scramble(3)) },
   { at: 2660, run: both(gun(60, 60), gun(180, 90)) },
@@ -88,7 +87,6 @@ const WAVES: Wave[] = [
   // More variety: helicopters, aerobatics, hatches.
   { at: 360, run: cross(2) },
   { at: 1300, run: chopper(200, 80) },
-  { at: 2240, run: loops(120, 5, 120) },
   { at: 3000, run: both(chopper(40, 70), chopper(200, 100)) },
   { at: 3540, run: hatch(60, 180) },
   { at: 4300, run: cross(3) },

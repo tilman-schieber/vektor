@@ -1,6 +1,7 @@
 // Stage 5: the volcano. Over the basalt fields and their lava lake, along the lava rivers, across
 // the ash plains and into the crater, where the fortress sits.
 import { Stage, Wave, dive, sweep, swoop, gun, cargo, tanks, scramble, heavy, swarm, chopper, loops, cross, both } from './stage';
+import { serpent } from './mid';
 import { COLS, TILE, noise } from './terrain';
 import { CRATER } from './boss';
 import { ENEMIES } from './enemies';
@@ -68,6 +69,8 @@ const silos = (...xs: number[]) => (w: World) =>
   xs.forEach((x, k) => void w.spawn(silo, x, -18, [k * 80], k === xs.length - 1 ? 'medal' : undefined));
 
 const WAVES: Wave[] = [
+  // Out of the lava rivers, a serpent.
+  { at: 1760, run: serpent() },
   // The basalt fields and the lava lake.
   { at: 60, run: dive(60, 5) },
   { at: 200, run: magma(-1, 4) },
@@ -85,11 +88,7 @@ const WAVES: Wave[] = [
   { at: 1460, run: swarm(120, 8) },
   { at: 1560, run: both(boat(1), magma(0, 2)) },
   { at: 1660, run: heavy(120, 'bomb') },
-  { at: 1780, run: both(chopper(30, 70), chopper(210, 100)) },
-  { at: 1880, run: both(boat(0), boat(1), magma(1, 2)) },
-  { at: 2000, run: dive(200, 6, 10) },
   // The ash plains.
-  { at: 2180, run: both(tanks(40, 4), tanks(200, 4)) },
   { at: 2280, run: silos(60, 180) },
   { at: 2380, run: scramble(4, 60) },
   { at: 2480, run: cargo(80) },
