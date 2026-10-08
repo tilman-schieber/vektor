@@ -1,7 +1,7 @@
 // The simulation: scrolling, the player, shots, enemies, bullets, items, bombs and the boss.
 import { W, H } from './draw';
 import { Enemy, EnemyDef, ItemKind, makeEnemy, gone } from './enemies';
-import { Bullet, ring } from './bullets';
+import { Bullet, ring, stepNeedle, stepFrost } from './bullets';
 import { Boss } from './boss';
 import { Terrain } from './terrain';
 import { STAGES } from './stages';
@@ -165,6 +165,8 @@ export class World {
 
   /** Easy mode: ships carry a shield. */
   readonly shielded: boolean;
+  /** Debug: nothing hurts the ship. */
+  god = false;
 
   constructor(rng: Rng, lives: number, shielded = false) {
     this.rng = rng;
@@ -523,6 +525,8 @@ export class World {
   private updateBullets() {
     const bursting: Bullet[] = [];
     for (const b of this.bullets) {
+      if (b.hang !== undefined) stepNeedle(this, b);
+      if (b.weave !== undefined) stepFrost(b);
       b.x += b.vx;
       b.y += b.vy;
       b.t++;
@@ -692,7 +696,7 @@ export class World {
     }
 
     const p = this.player;
-    if (!p.alive || p.invuln > 0 || p.timer > 0 || this.state !== 'play') return;
+    if (!p.alive || p.invuln > 0 || p.timer > 0 || this.state !== 'play' || this.god) return;
     for (const b of this.bullets) {
       const dx = b.x - p.x, dy = b.y - p.y;
       if (dx * dx + dy * dy < (b.r + 2) ** 2) return this.hitPlayer();

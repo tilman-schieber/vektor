@@ -1,6 +1,6 @@
 // Enemy types: hit points, score, sprite and how each one moves and shoots.
 import type { World } from './world';
-import { aimed, aimAt, fan, ring } from './bullets';
+import { aimed, aimAt, fan, ring, needles } from './bullets';
 import { W, H } from './draw';
 
 export type ItemKind = 'weapon' | 'missile' | 'bomb' | 'medal';
@@ -195,8 +195,9 @@ const interceptor: EnemyDef = {
     // Once turned it leans toward the player.
     if (e.vy > 0) e.vx += Math.sign(w.player.x - e.x) * 0.03;
     if (e.vy > 0 && !e.p[2]) {
+      // It leaves needles behind as it turns: they hang a moment, then dart at you.
       e.p[2] = 1;
-      aimed(w, e.x, e.y, 1 + loopShots(w) * 2, 0.22, 2.2);
+      needles(w, e.x, e.y, aimAt(w, e.x, e.y), 1 + loopShots(w) * 2, 0.4, 1.2, 24, 3.0);
     }
   },
 };

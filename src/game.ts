@@ -2,7 +2,7 @@ import { MODES, Mode } from './modes';
 import { loadTables, saveTables, rankFor, ScoreEntry, Tables, MAX_SCORES, load, save, fetchGlobal, submitGlobal, flushPending } from './scores';
 import { sfx, music, TUNE } from './audio';
 import { makeRng, randomSeed } from './rng';
-import { World, Controls } from './world';
+import { World, Controls, MAX_LEVEL, MAX_MISSILES, MAX_BOMBS } from './world';
 import { HELP_PAGES } from './help';
 
 export type Action = 'up' | 'down' | 'left' | 'right' | 'fire' | 'bomb' | 'start' | 'back' | 'quit' | 'mute' | 'scores';
@@ -83,6 +83,8 @@ export class Game {
   private entryFresh = false;
 
   helpPage = 0;
+  /** Started with ?debug in the URL: cheat keys in play, and no high scores. */
+  readonly debug = typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug');
   /** Scroll of the terrain behind the menus. */
   titleDist = 0;
 
@@ -263,6 +265,7 @@ export class Game {
       if (pressed.has('quit')) this.toTitle();
       return;
     }
+    if (this.debug) this.debugKeys(input.typed);
     w.update(this.controls(input));
     this.stepMusic(w);
 
@@ -317,7 +320,7 @@ export class Game {
     this.entryRank = -1;
     this.globalRank = -1;
     this.scoresGlobal = !!this.global;
-    if (w.score <= 0) return;
+    if (w.score <= 0 || this.debug) return;
     const entry: ScoreEntry = { name: '', score: w.score, loop: w.loop, medals: w.medals };
     const list = this.tables[this.mode.id];
     const at = rankFor(list, entry);
@@ -399,6 +402,24 @@ export class Game {
       sfx.move();
     }
     if (pressed.has('start') || pressed.has('back') || pressed.has('scores') || pressed.has('fire')) this.toTitle();
+  }
+
+  // ---------- debug mode ----------
+
+  /** 1-5 stage, N next stage, B boss, U full power, I invincible, V switch weapon. */
+  private debugKeys(typed: string[]) {
+    const w = this.world!;
+    const p = w.player;
+    for (const k of typed) {
+      if (k >= '1' && k <= '5') this.gotoStage(Number(k));
+      else if (k === 'N') this.gotoStage(w.stageIdx + 2);
+      else if (k === 'B') this.bossNow();
+      else if (k === 'U') Object.assign(p, { level: MAX_LEVEL, missiles: MAX_MISSILES, bombs: MAX_BOMBS });
+      else if (k === 'I') w.god = !w.god;
+      else if (k === 'V') p.weapon = p.weapon === 'vulcan' ? 'laser' : 'vulcan';
+      else continue;
+      sfx.select();
+    }
   }
 
   // ---------- dev helpers ----------

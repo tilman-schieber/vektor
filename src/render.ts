@@ -195,6 +195,43 @@ function drawBullets(ctx: Ctx, w: World, frame: number) {
       disc(ctx, b.x, b.y, k < 0.5 ? 2.5 : 2, k < 0.3 ? '#fff0a0' : k < 0.6 ? '#f8b800' : '#f85800');
       continue;
     }
+    if (b.weave !== undefined) {
+      // Frost shard: an ice-blue diamond with a white glint.
+      const x = Math.round(b.x), y = Math.round(b.y);
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.moveTo(x, y - 5);
+      ctx.lineTo(x + 4, y);
+      ctx.lineTo(x, y + 5);
+      ctx.lineTo(x - 4, y);
+      ctx.fill();
+      ctx.fillStyle = ((frame + b.t) >> 3) % 2 ? '#3cbcfc' : '#0070ec';
+      ctx.beginPath();
+      ctx.moveTo(x, y - 4);
+      ctx.lineTo(x + 3, y);
+      ctx.lineTo(x, y + 4);
+      ctx.lineTo(x - 3, y);
+      ctx.fill();
+      ctx.fillStyle = WHITE;
+      ctx.fillRect(x - 1, y - 1, 2, 2);
+      continue;
+    }
+    if (b.hang !== undefined) {
+      // Needle: a steel dart pointing where it will go; it flickers just before it flies.
+      const sx = Math.sin(b.ang!), sy = Math.cos(b.ang!);
+      const hot = b.t >= b.hang || (b.hang - b.t < 12 && frame % 4 < 2);
+      ctx.lineCap = 'round';
+      for (const [width, color] of [[4, '#000'], [2, hot ? '#f8f8f8' : '#58f8f8']] as const) {
+        ctx.strokeStyle = color;
+        ctx.lineWidth = width;
+        ctx.beginPath();
+        ctx.moveTo(b.x - sx * 5, b.y - sy * 5);
+        ctx.lineTo(b.x + sx * 4, b.y + sy * 4);
+        ctx.stroke();
+      }
+      disc(ctx, b.x + sx * 4, b.y + sy * 4, 1, hot ? '#58f8f8' : WHITE);
+      continue;
+    }
     if (b.burst !== undefined) {
       // Lava bomb: a dark crust round a glowing middle that swells before it bursts.
       const r = 3 + (b.t > b.burst - 15 && frame % 4 < 2 ? 1 : 0);
@@ -418,6 +455,7 @@ function drawHud(ctx: Ctx, game: Game, w: World, frame: number) {
     ctx.fillRect(x + 2, y + 1, 1, 3);
   }
   drawStatus(ctx, w, frame);
+  if (game.debug) drawTextShadow(ctx, w.god ? 'DEBUG GOD' : 'DEBUG', 4, 24, w.god ? YELLOW : GREY);
 
   if (w.boss && w.boss.dying < 0 && w.boss.phase > 0) {
     // Boss health: the pods, then the core.
@@ -654,6 +692,11 @@ function renderTitle(ctx: Ctx, game: Game, frame: number) {
   if ((frame >> 5) % 2 === 0) drawTextCentered(ctx, 'PRESS ENTER OR FIRE', W / 2, 192, YELLOW);
   drawTextCentered(ctx, 'H SCORES   M MUSIC', W / 2, 206, GREY);
   drawTextCentered(ctx, 'ARROWS MOVE  SPACE FIRE  X BOMB', W / 2, 300, LIGHT);
+  if (game.debug) {
+    drawTextCentered(ctx, 'DEBUG - NO HIGH SCORES', W / 2, 232, YELLOW);
+    drawTextCentered(ctx, '1-5 STAGE  N NEXT  B BOSS', W / 2, 252, LIGHT);
+    drawTextCentered(ctx, 'U POWER  I INVINCIBLE  V WEAPON', W / 2, 264, LIGHT);
+  }
 }
 
 function renderScores(ctx: Ctx, game: Game, frame: number) {

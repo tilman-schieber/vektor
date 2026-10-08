@@ -17,6 +17,19 @@ export interface Bullet {
   burst?: number;
   /** A flame: gone at this age. */
   life?: number;
+  /** A needle: coasts to a stop, hangs in the air until this age, then streaks off along `ang`. */
+  hang?: number;
+  /** Needle: its heading, 0 straight down. */
+  ang?: number;
+  /** Needle: the top speed it streaks off at. */
+  dash?: number;
+  /** A frost shard: how far (radians) its heading swings either side of `ang` as it snakes along. */
+  weave?: number;
+  /** Frost shard: its speed, and where in the swing it starts. */
+  spd?: number;
+  phase?: number;
+  /** Needle: while it hangs it turns to follow the player, and goes where the player was at release. */
+  track?: boolean;
 }
 
 /** Bullets aren't fired from off screen or point-blank under the player's nose. */
@@ -65,4 +78,52 @@ export function flame(w: World, x: number, y: number, ang: number) {
     shoot(w, x, y, ang + (w.rng() - 0.5) * 0.5, 2.4 + w.rng() * 0.8);
     w.bullets[w.bullets.length - 1].life = 34 + Math.floor(w.rng() * 10);
   }
+}
+
+/**
+ * A needle: thrown out at `drift` along `ang`, it coasts to a stop and hangs for `hang` frames,
+ * then streaks off at up to `dash`. A tracking needle points at the player while it hangs and
+ * locks on when it goes, so step aside once they fly.
+ */
+export function needle(w: World, x: number, y: number, ang: number, drift: number, hang: number, dash: number, track = true) {
+  if (!canFire(w, x, y)) return;
+  w.bullets.push({ x, y, vx: Math.sin(ang) * drift, vy: Math.cos(ang) * drift, r: 2, big: false, t: 0, dead: false, hang, ang, dash: dash * w.bulletSpeed, track });
+}
+
+/** n needles fanned `spread` apart round `ang`. */
+export function needles(w: World, x: number, y: number, ang: number, n: number, spread: number, drift: number, hang: number, dash: number, track = true) {
+  if (!canFire(w, x, y)) return;
+  for (let k = 0; k < n; k++) needle(w, x, y, ang + (k - (n - 1) / 2) * spread, drift, hang, dash, track);
+  sfx.enemyShot();
+}
+
+/** Moves a needle one frame: coast, hang and turn, then speed up. */
+export function stepNeedle(w: World, b: Bullet) {
+  if (b.t < b.hang!) {
+    b.vx *= 0.93;
+    b.vy *= 0.93;
+    if (b.track) b.ang = aimAt(w, b.x, b.y);
+    return;
+  }
+  if (b.t === b.hang) sfx.needle();
+  const s = Math.min(b.dash!, Math.hypot(b.vx, b.vy) + 0.14);
+  b.vx = Math.sin(b.ang!) * s;
+  b.vy = Math.cos(b.ang!) * s;
+}
+
+/** A frost shard: flies along `ang` but snakes from side to side, `weave` radians each way. */
+export function frost(w: World, x: number, y: number, ang: number, speed: number, weave = 0.5, phase = 0) {
+  if (!canFire(w, x, y)) return;
+  const spd = speed * w.bulletSpeed;
+  w.bullets.push({ x, y, vx: 0, vy: 0, r: 2, big: false, t: 0, dead: false, ang, spd, weave, phase });
+  stepFrost(w.bullets[w.bullets.length - 1]);
+}
+
+/** Frost shards swing through a full weave in this many frames. */
+const WEAVE_PERIOD = 60;
+
+export function stepFrost(b: Bullet) {
+  const a = b.ang! + b.weave! * Math.sin(((b.t / WEAVE_PERIOD) * 2 + (b.phase ?? 0)) * Math.PI);
+  b.vx = Math.sin(a) * b.spd!;
+  b.vy = Math.cos(a) * b.spd!;
 }

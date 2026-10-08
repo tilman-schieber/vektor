@@ -2,7 +2,7 @@
 // core, phase 3 the core in a rage below half health. A BossDef gives the layout and the patterns.
 import type { World } from './world';
 import { ENEMIES, Enemy } from './enemies';
-import { aimed, aimAt, fan, ring, shoot, canFire, lob, flame } from './bullets';
+import { aimed, aimAt, fan, ring, shoot, canFire, lob, flame, needle, needles, frost } from './bullets';
 import { sfx } from './audio';
 import { W } from './draw';
 import { spr } from './sprites';
@@ -247,30 +247,33 @@ export const CRAWLER: BossDef = {
   hoverY: 90,
   act(b, w) {
     const c = b.core;
-    // It grinds forward and back on its tracks.
-    b.x = W / 2 + Math.sin(b.t / 140) * 22;
+    // It grinds back and forth on its tracks; once open it turns to follow you, faster in a rage.
+    if (b.phase === 1) b.x = W / 2 + Math.sin(b.t / 140) * 22;
+    else b.x += Math.max(-1, Math.min(1, (w.player.x - b.x) * 0.01)) * (b.phase === 3 ? 0.7 : 0.35);
+    b.x = Math.max(W / 2 - 60, Math.min(W / 2 + 60, b.x));
     b.y = 90 + Math.sin(b.t / 70) * 8;
     if (b.phase === 1) {
+      // Front turrets throw needles that lock on; rear turrets fire plain pairs.
       b.pods.forEach((pod, i) => {
         if (pod.dead) return;
-        if ((b.t + i * 23) % 92 === 0) fan(w, pod.x + Math.sin(pod.aim) * 10, pod.y + Math.cos(pod.aim) * 10, pod.aim, 2, 0.14, 2.0);
+        const gx = pod.x + Math.sin(pod.aim) * 10, gy = pod.y + Math.cos(pod.aim) * 10;
+        if (i < 2 && (b.t + i * 55) % 110 === 0) needles(w, gx, gy, pod.aim, 3, 0.35, 1.6, 30, 3.2);
+        if (i >= 2 && (b.t + i * 23) % 92 === 0) fan(w, gx, gy, pod.aim, 2, 0.14, 2.0);
       });
-      if (b.t % 240 === 200) ring(w, c.x, c.y, 10 + w.loop * 2, 1.2, b.t / 40, true);
+      // Now and then a curtain of needles thrown wide across the screen, all turning on you at once.
+      if (b.t % 300 === 240) needles(w, c.x, c.y + 10, 0, 9, 0.28, 4.5, 44, 3.0);
     } else if (b.phase === 2) {
-      // A fan that sweeps side to side, and aimed shells.
-      if (b.t % 50 === 0) fan(w, c.x, c.y + 10, Math.sin(b.t / 60) * 0.5, 5, 0.24, 1.6);
-      if (b.t % 90 === 45) aimed(w, c.x, c.y + 10, 3, 0.18, 2.4, true);
+      // A ring of needles that hangs round the hull, then bursts outward; between them, a trio that locks on.
+      if (b.t % 90 === 0) needles(w, c.x, c.y, b.t / 50, 12 + w.loop * 2, (Math.PI * 2) / (12 + w.loop * 2), 3, 34, 2.4, false);
+      if (b.t % 90 === 50) needles(w, c.x, c.y + 10, aimAt(w, c.x, c.y), 3, 0.3, 1.4, 26, 3.2);
     } else {
-      // Two spirals turning against each other.
-      if (b.t % 7 === 0 && canFire(w, c.x, c.y)) {
-        b.spin += 0.21;
-        for (let k = 0; k < 2; k++) {
-          shoot(w, c.x, c.y, b.spin + k * Math.PI, 1.3);
-          shoot(w, c.x, c.y, -b.spin + k * Math.PI + 0.5, 1.3);
-        }
-        sfx.enemyShot();
+      // A spiral of needles that freeze in place and then fly on, and a fan of locks every so often.
+      if (b.t % 8 === 0 && canFire(w, c.x, c.y)) {
+        b.spin += 0.5;
+        needle(w, c.x, c.y, b.spin, 2, 26, 2.2, false);
+        needle(w, c.x, c.y, b.spin + Math.PI, 2, 26, 2.2, false);
       }
-      if (b.t % 60 === 30) aimed(w, c.x, c.y + 10, 1, 0, 2.6, true);
+      if (b.t % 120 === 60) needles(w, c.x, c.y + 10, aimAt(w, c.x, c.y), 5, 0.3, 1.6, 30, 3.0);
     }
   },
 };
@@ -297,24 +300,33 @@ export const BATTLESHIP: BossDef = {
   act(b, w) {
     const c = b.core;
     b.x = W / 2 + Math.sin(b.t / 160) * 18;
+    // Once open it steams forward toward you and back again.
+    const toY = b.phase === 1 ? 98 : 98 + (1 - Math.cos(b.t / 110)) * 22;
+    b.y += (toY - b.y) * 0.05;
     if (b.phase === 1) {
       b.pods.forEach((pod, i) => {
         if (pod.dead) return;
-        if ((b.t + i * 27) % 110 === 0) fan(w, pod.x + Math.sin(pod.aim) * 10, pod.y + Math.cos(pod.aim) * 10, pod.aim, 3, 0.12, 2.0);
+        // The bow gun sends a snake of frost shards slithering after you.
+        if (i === 0 && b.t % 170 === 80) {
+          const a = pod.aim;
+          for (let k = 0; k < 6; k++) w.after(k * 6, () => !pod.dead && frost(w, pod.x, pod.y + 10, a, 1.9, 0.45));
+        } else if (i > 0 && (b.t + i * 27) % 110 === 0) fan(w, pod.x + Math.sin(pod.aim) * 10, pod.y + Math.cos(pod.aim) * 10, pod.aim, 3, 0.12, 2.0);
       });
-      // Broadsides from both beams.
-      if (b.t % 260 === 200) {
-        fan(w, b.x - 20, b.y, 0.8, 5, 0.15, 1.5, true);
-        fan(w, b.x + 20, b.y, -0.8, 5, 0.15, 1.5, true);
-      }
+      // Broadsides of frost from both beams, snaking out to the sides.
+      if (b.t % 260 === 200)
+        for (let k = 0; k < 5; k++) {
+          frost(w, b.x - 20, b.y + (k - 2) * 12, 0.9, 1.5, 0.35, k * 0.4);
+          frost(w, b.x + 20, b.y + (k - 2) * 12, -0.9, 1.5, 0.35, k * 0.4);
+        }
     } else if (b.phase === 2) {
-      if (b.t % 40 === 0) aimed(w, c.x, c.y + 12, 3, 0.16, 2.2);
-      if (b.t % 90 === 60) ring(w, c.x, c.y, 16 + w.loop * 2, 1.3, b.t / 45);
+      // A curtain of frost straight down across the beam, swaying together; aimed shots between.
+      if (b.t % 64 === 0) for (let k = -3; k <= 3; k++) frost(w, c.x + k * 18, c.y + 10, 0, 1.4, 0.4);
+      if (b.t % 64 === 32) aimed(w, c.x, c.y + 12, 3, 0.16, 2.2);
     } else {
-      // A flower of rings, each turned a little further.
-      if (b.t % 18 === 0) {
-        b.spin += 0.13;
-        ring(w, c.x, c.y, 10, 1.25, b.spin);
+      // A snowflake: six arms of frost, each burst turned a little further, and aimed shells.
+      if (b.t % 22 === 0) {
+        b.spin += 0.19;
+        for (let k = 0; k < 6; k++) frost(w, c.x, c.y, b.spin + (k * Math.PI) / 3, 1.3, 0.3);
       }
       if (b.t % 70 === 35) aimed(w, c.x, c.y + 12, 1, 0, 2.6, true);
     }

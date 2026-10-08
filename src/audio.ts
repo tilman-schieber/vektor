@@ -108,6 +108,7 @@ export const sfx = {
       tone(440, 0.2, 'square', 0.1, ctx.currentTime + k * 0.5 + 0.25, 660);
     }
   },
+  needle: () => every('needle', 0.08) && tone(2400, 0.06, 'triangle', 0.07, 0, 3600),
   shieldDown: () => tone(1200, 0.3, 'sawtooth', 0.16, 0, 150),
   shieldUp: () => arp([79, 84, 91], 0.05, 0.16, 'triangle'),
   oneUp: () => arp([76, 79, 88, 84, 86, 91], 0.07, 0.22),
