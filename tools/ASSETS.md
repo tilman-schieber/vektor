@@ -342,6 +342,16 @@ Base tile ids:
 
 Rejected space→nebula attempts: 07614f2a-432c-434a-84cc-fc094d4dc52a (enhance on: the all-nebula tile came out pure black, the "nebula" was only a purple rim), 34a4e5df-072c-451a-a276-ef0c790ea77f (no shape_style: blocky purple platforms), c08200a8-37db-4d2e-9ac4-76df8b01d8d3 (good art, but the model drew the space as the *upper* and the nebula as the *lower* terrain). The final sheet re-used c08200a8's two base tiles the right way round (lower_base = its black star tile 6226561d, upper_base = its purple tile 1b838527), which forced the correct assignment.
 
+### Space → station hull (open-space layout)
+
+The orbit stage was changed so that level 0 is open space everywhere (the stars and soft nebula clouds are drawn in code behind it), and the only terrain is station hull plating floating in space. Generations spent: 1 (balance went from 787 to 786). The first try was accepted.
+
+| file | tileset id | lower → upper | transition | notes |
+|---|---|---|---|---|
+| tiles/space_hull.png/.json/_example.png | 4cd9bb04-dee2-4a10-84fa-6046f70ef429 | "empty pitch black outer space, plain solid very dark blue-black void, no stars" (no lower base, new lower base ceee4553…) → "space station hull, light grey and white metal plating panels with panel seams, rivets and small glowing blue lights" (**upper_base 2918d8c6…**, the rock_hull station hull) | "thin straight steel bulkhead rim of the station hull with a dark outline and small blue edge lights", **square**, 0.25, enhance false, text_guidance 10, medium detail, single color outline, medium shading, high top-down | The all-space tile is perfectly flat: only (0,3,28) and (0,4,28), no stars. The edge is a clean grey-steel rim, about 2px wide, with a dark outline, rounded-square corners and a few cyan light pixels along it. The hull is not raised: no cliff faces. The terrains are the right way round (checked on the all-lower and all-upper tiles). The all-hull tile matches rock_hull's: 25/256 pixels differ, max 24 per channel, and only 5 of them by more than 10. |
+
+Base tile ids: space (empty) `ceee4553-62a3-45a8-9060-af177e16f3c0`, station hull `2918d8c6-74ba-4cbd-afa8-c7c0ea779ea9` (same as rock_hull).
+
 ## Enemies
 
 Two create_1_direction_object grids (10 generations each): grid A at 24px (style ref = enemies/fighter.png, review ca13472c…, tag `orbit_enemies`) with 14 raider, 14 stealth, 12 mine, 12 small/mid asteroid and 12 more fighter items; grid B at 32px (style ref = enemies/carrier.png, review f434e104…, tag `orbit_enemies`) with 12 satellite, 12 gravity drone, 8 hangar hatch, 8 asteroid and 24 station-prop items (antenna, solar array, radar dish, docking ring, cargo pods, skylight). The cleanup drops 8-connected clusters of 3px or less and re-centres by integer shift.
