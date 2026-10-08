@@ -548,14 +548,83 @@ function drawRotor(ctx: Ctx, x: number, y: number, frame: number, size = 30) {
   ctx.fillRect(Math.round(x) - 1, Math.round(y) - 1, 3, 3);
 }
 
-/** Stars far behind the scenery, slower than it, twinkling: only over open space. */
+/**
+ * Deep space behind the scenery, over open space only: a gas giant far off drifting by very slowly,
+ * soft nebula clouds a little nearer, and stars.
+ */
+function drawSpace(ctx: Ctx, w: World) {
+  ctx.save();
+  // Clip to the tiles that are all open space, so nothing shows through the station.
+  ctx.beginPath();
+  const off = w.dist % TILE;
+  for (let r = -1; r <= H / TILE; r++)
+    for (let c = 0; c < W / TILE; c++) {
+      const y = r * TILE + off;
+      if ([0, TILE].every((dy) => [0, TILE].every((dx) => w.terrain.levelAt(c * TILE + dx, y + dy, w.dist) === 0))) ctx.rect(c * TILE, y, TILE, TILE);
+    }
+  ctx.clip();
+  drawPlanet(ctx, W - 70, -170 + w.dist * 0.11, 92);
+  // Nebula clouds: soft glows that come round again every NEBULA_LOOP pixels.
+  const NEBULA_LOOP = 1400;
+  ctx.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 7; i++) {
+    const h = hash(i * 4513 + 7);
+    const x = (h % (W + 80)) - 40, r = 60 + ((h >>> 9) % 70);
+    const y = ((((h >>> 3) % NEBULA_LOOP) + w.dist * 0.25) % NEBULA_LOOP) - r;
+    if (y < -r || y > H + r) continue;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    const hue = i % 3 === 0 ? '60,200,220' : i % 3 === 1 ? '150,70,230' : '220,60,160';
+    g.addColorStop(0, `rgba(${hue},0.20)`);
+    g.addColorStop(0.5, `rgba(${hue},0.08)`);
+    g.addColorStop(1, `rgba(${hue},0)`);
+    ctx.fillStyle = g;
+    ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  }
+  ctx.globalCompositeOperation = 'source-over';
+  drawStars(ctx, w);
+  ctx.restore();
+}
+
+/** A banded gas giant, lit from the upper left, with a thin ring. */
+function drawPlanet(ctx: Ctx, x: number, y: number, r: number) {
+  if (y < -r * 1.6 || y > H + r * 1.6) return;
+  const ring = (from: number, to: number) => {
+    ctx.strokeStyle = 'rgba(200,190,230,0.35)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.ellipse(x, y, r * 1.55, r * 0.28, -0.35, from, to);
+    ctx.stroke();
+  };
+  ctx.save();
+  // The far half of the ring goes behind the planet, the near half in front.
+  ring(Math.PI, Math.PI * 2);
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.save();
+  ctx.clip();
+  const bands = ['#5a4a78', '#6c5a8a', '#4c3e6a', '#7a6494', '#5e4c7e', '#463a62', '#6a5888'];
+  for (let k = 0; k < bands.length; k++) {
+    ctx.fillStyle = bands[k];
+    ctx.fillRect(x - r, y - r + (k * 2 * r) / bands.length, r * 2, (2 * r) / bands.length + 1);
+  }
+  const shade = ctx.createRadialGradient(x - r * 0.45, y - r * 0.45, r * 0.1, x, y, r * 1.05);
+  shade.addColorStop(0, 'rgba(255,240,255,0.18)');
+  shade.addColorStop(0.6, 'rgba(0,0,0,0)');
+  shade.addColorStop(1, 'rgba(0,0,10,0.75)');
+  ctx.fillStyle = shade;
+  ctx.fillRect(x - r, y - r, r * 2, r * 2);
+  ctx.restore();
+  ring(0, Math.PI);
+  ctx.restore();
+}
+
+/** Stars far behind the scenery, slower than it, twinkling. */
 function drawStars(ctx: Ctx, w: World) {
   for (let i = 0; i < 90; i++) {
     const h = hash(i * 7919 + 17);
     const depth = 0.15 + (h % 3) * 0.15;
     const x = (h >>> 4) % W;
     const y = (((h >>> 12) % H) + w.dist * depth) % H;
-    if (w.terrain.levelAt(x, y, w.dist) !== 0) continue;
     const tw = (w.frame + (h >>> 20)) % 90 < 6;
     ctx.fillStyle = tw ? WHITE : depth > 0.4 ? '#c8d8f8' : depth > 0.2 ? '#8898c0' : '#506080';
     ctx.fillRect(x, Math.floor(y), tw ? 2 : 1, tw ? 2 : 1);
@@ -592,6 +661,7 @@ function drawSearchlights(ctx: Ctx, w: World) {
 /** The playing field: ground, things on it, shadows, things in the air, bullets on top. */
 function drawWorld(ctx: Ctx, w: World, frame: number) {
   w.terrain.draw(ctx, w.dist, w.frame);
+  if (w.terrain.ground.space) drawSpace(ctx, w);
   for (const wr of w.wrecks) drawAt(ctx, spr('enemies/wreck'), wr.x, wr.y);
   for (const e of w.enemies) if (e.def.ground) drawGroundEnemy(ctx, e, w, frame);
   for (const it of w.items) if (it.kind === 'medal') drawItem(ctx, it, frame);
@@ -600,7 +670,6 @@ function drawWorld(ctx: Ctx, w: World, frame: number) {
   for (const b of w.blasts) if (b.ground) drawBlast(ctx, b);
 
   if (w.terrain.ground.night) drawSearchlights(ctx, w);
-  if (w.terrain.ground.space) drawStars(ctx, w);
 
   // Shadows of everything in the air; in space nothing casts one.
   const b = w.boss;

@@ -2,7 +2,7 @@
 // caution card and a health bar, and if they aren't shot down in time they get away.
 import type { World } from './world';
 import { ENEMIES, Enemy, EnemyDef, ItemKind } from './enemies';
-import { aimed, aimAt, fan, ring, shoot, lob, flame, needles, frost, canFire } from './bullets';
+import { aimed, aimAt, fan, ring, shoot, lob, flame, frost, canFire } from './bullets';
 import { W, H } from './draw';
 
 /** Frames a mid-boss stays before it gets away. */
@@ -40,6 +40,12 @@ export const subUp = (e: Enemy) => {
   return k >= SUB_UP && k < SUB_DOWN;
 };
 
+/** True if the whole hull, `half` pixels either way along y and `wide` across, lies in open water. */
+function afloat(w: World, x: number, y: number, half: number, wide: number) {
+  for (let dy = -half; dy <= half; dy += 16) for (const dx of [-wide, 0, wide]) if (w.terrain.levelAt(x + dx, y + dy, w.dist) !== 0) return false;
+  return true;
+}
+
 const submarine: EnemyDef = {
   name: 'submarine',
   sprite: 'mid/submarine',
@@ -51,37 +57,44 @@ const submarine: EnemyDef = {
   sinks: true,
   big: true,
   update(e, w) {
-    e.vx = e.vy = 0;
+    // It lies in the water and drifts with it, as ships do.
+    e.vx = 0;
+    e.vy = w.scroll;
+    // Its age: e.t skips ahead while it waits for room to come up.
+    e.p[1] = (e.p[1] ?? 0) + 1;
     const k = e.t % SUB_CYCLE;
     e.hidden = !subUp(e);
     if (k === 0) {
-      // Three surfacings, then it is gone. It comes up only in open water.
-      if (e.t >= SUB_CYCLE * 3) return escape(e, w);
-      // The ground scrolls on under it while it stays, so it needs open water above it too.
-      // Better with open water above it too, as the ground scrolls on under it; with none at all it leaves.
-      const open = (x: number, y: number, dys: number[]) => dys.every((dy) => w.terrain.levelAt(x, y + dy, w.dist) === 0);
+      // Three surfacings, then it is gone. It comes up near the top, where its whole hull is in
+      // open water; with no room anywhere it waits under water and looks again.
+      if ((e.p[0] ?? 0) >= 3 || (e.p[1] ?? 0) > MID_TIME) return escape(e, w);
       let found = false;
-      for (const dys of [[-180, -120, -60, 0, 40], [0, 40]])
-        for (let tries = 0; tries < 20 && !found; tries++) {
-          const x = 40 + w.rng() * (W - 80), y = 70 + w.rng() * 50;
-          if (open(x, y, dys)) {
-            e.x = x;
-            e.y = y;
-            found = true;
-          }
+      for (let tries = 0; tries < 40 && !found; tries++) {
+        const x = 30 + w.rng() * (W - 60), y = 10 + w.rng() * 70;
+        if (afloat(w, x, y, 48, 10)) {
+          e.x = x;
+          e.y = y;
+          found = true;
         }
-      if (!found) return escape(e, w);
+      }
+      if (!found) {
+        // Out of sight while it waits.
+        e.t += SUB_CYCLE - 30;
+        e.y = -64;
+        e.hidden = true;
+        return;
+      }
+      e.p[0] = (e.p[0] ?? 0) + 1;
     }
-    // Run aground: it dives at once.
-    if (subUp(e) && w.terrain.levelAt(e.x, e.y, w.dist) !== 0) e.t += SUB_DOWN - k;
-    if (!subUp(e)) return;
+    // Drifting down too close to you, it dives early and holds its fire.
+    if (subUp(e) && e.y > 175) e.t += SUB_DOWN - k;
+    if (!subUp(e) || e.y > 150) return;
     const s = k - SUB_UP;
-    // Torpedoes fanned from the bow, aimed shots from the tower, and rockets from the hatches.
     // It's the first of them, so it goes easy: one torpedo spread, single shots, and from its second
     // surfacing a rocket.
     if (s === 40) fan(w, e.x, e.y + 40, 0, 3, 0.3, 1.2, true);
     if (s === 90 || s === 160) aimed(w, e.x, e.y + 11, 1, 0, 2.0);
-    if (s === 120 && e.t > SUB_CYCLE) rocket(w, e.x, e.y - 16);
+    if (s === 120 && e.p[0] > 1) rocket(w, e.x, e.y - 16);
   },
 };
 
@@ -171,12 +184,8 @@ const wormHead: EnemyDef = {
       const u = (k - WORM_UNDER) / (WORM_CYCLE - WORM_UNDER);
       const x0 = e.p[1] ?? e.x, x1 = e.p[2] ?? e.x;
       moveTo(e, x0 + (x1 - x0) * u, WORM_Y - Math.sin(Math.PI * u) * 175);
-      const s = k - WORM_UNDER;
-      if (s === 2) {
-        w.shake = Math.max(w.shake, 8);
-        ring(w, e.x, e.y, 10 + w.loop * 2, 1.2, e.t / 20);
-      }
-      if (s % 45 === 20) needles(w, e.x, e.y, aimAt(w, e.x, e.y), 3, 0.3, 1.4, 24, 3.0);
+      // It fires nothing: dodging it is the fight. The ground shakes as it breaks out.
+      if (k === WORM_UNDER) w.shake = Math.max(w.shake, 8);
     }
     track(e, under);
   },
@@ -207,14 +216,31 @@ const icebreaker: EnemyDef = {
   sinks: true,
   big: true,
   update(e, w) {
-    if (e.t > MID_TIME) {
-      // Steams off down the screen.
+    if (e.t > MID_TIME || e.p[1]) {
+      // Steams off down the screen, back the way it came.
       e.vx = 0;
       e.vy = Math.min(2, e.vy + 0.03);
       return;
     }
     e.vy = (100 - e.y) * 0.02;
-    e.vx = (W / 2 + Math.sin(e.t / 120) * 50 - e.x) * 0.03;
+    // It keeps to open water, breaking through floes on the way, but never up onto snow or land.
+    if (e.t % 10 === 0) {
+      let best = e.x, cost = Infinity;
+      for (let x = 32; x <= W - 32; x += 8) {
+        let c = Math.abs(x - e.x) * 0.2;
+        for (let dy = -48; dy <= 48; dy += 16)
+          for (const dx of [-14, 0, 14]) {
+            const lv = w.terrain.levelAt(x + dx, e.y + dy, w.dist);
+            c += lv === 0 ? 0 : lv === 1 ? 4 : 200;
+          }
+        if (c < cost) (cost = c), (best = x);
+      }
+      e.p[0] = best;
+      // No open water left, or snow coming up under its stern as the ground scrolls on: it turns back.
+      const ahead = [-14, 0, 14].some((dx) => w.terrain.levelAt(e.x + dx, e.y - 64, w.dist) >= 2);
+      if (cost >= 200 || ahead) e.p[1] = 1;
+    }
+    e.vx = Math.max(-0.8, Math.min(0.8, ((e.p[0] ?? e.x) - e.x) * 0.04));
     e.aim = aimAt(w, e.x, e.y);
     if (e.y < 0) return;
     const angry = e.hp < (e.maxHp ?? e.hp) / 2;

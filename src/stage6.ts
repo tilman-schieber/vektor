@@ -1,35 +1,27 @@
-// Stage 6: up out of the atmosphere into orbit. Open space and nebulae, a field of drifting asteroids,
-// the defence ring with its laser fences, and the station built into an asteroid, where the
-// mothership waits.
+// Stage 6: up out of the atmosphere into orbit. Open space with nebulae and a gas giant far off
+// (drawn behind, see drawSpace), a field of drifting asteroids, the defence ring with its laser
+// fences, and the station, where the mothership waits.
 import { Stage, Wave, cargo, scramble, swarm, hatch, both } from './stage';
 import { shieldFrigate } from './mid';
 import type { World } from './world';
 import { ENEMIES } from './enemies';
-import { noise } from './terrain';
 import { MOTHERSHIP } from './boss';
 import { W } from './draw';
 
 const enum Level {
   Space = 0,
-  Nebula = 1,
-  Rock = 2,
-  Hull = 3,
+  Hull = 1,
 }
 
-function profile(seed: number, x: number, j: number) {
-  const n = noise(seed, x / 4, j / 4) * 0.7 + noise(seed + 1, x / 1.7, j / 1.7) * 0.3;
-  // Open space with wisps of nebula.
-  if (j < 70) return n > 0.45 ? Level.Nebula : Level.Space;
-  // The debris field: thick nebula, with crusts of rock drifting in it.
-  if (j < 150) return n > 0.62 ? Level.Rock : n > 0.05 ? Level.Nebula : Level.Space;
-  // The defence ring: open space again.
-  if (j < 205) return n > 0.5 ? Level.Nebula : Level.Space;
-  // The station's asteroid comes up from below, the station on top of it.
-  const edge = 4.5 + noise(seed + 2, x / 3, j / 3) * 1.5 + Math.min(3, (j - 205) / 4);
-  const d = Math.abs(x - 7.5);
-  if (j < 212) return n > 0.2 ? Level.Nebula : Level.Space;
-  if (j < 218 || d > edge + 1.5) return d > edge + 3 ? (n > 0 ? Level.Nebula : Level.Space) : Level.Rock;
-  return d > edge ? Level.Rock : Level.Hull;
+/** Tile row where the station begins. */
+const STATION = 214;
+
+/** Nothing but space, until the station: a docking spine, then wide modules joined by narrower links. */
+function profile(_seed: number, x: number, j: number) {
+  if (j < STATION) return Level.Space;
+  const d = Math.abs(x - 7.5), m = j - STATION;
+  if (m < 6) return d < 1.6 ? Level.Hull : Level.Space;
+  return d < (m % 18 < 13 ? 6 : 3.4) ? Level.Hull : Level.Space;
 }
 
 type Run = (w: World) => void;
@@ -121,7 +113,7 @@ const WAVES: Wave[] = [
   // The station.
   { at: 3480, run: hangars(80, 160) },
   { at: 3560, run: dive(120, 6, 10) },
-  { at: 3640, run: hatch(56, 184) },
+  { at: 3640, run: hatch(84, 156) },
   { at: 3720, run: cargo(120) },
   { at: 3800, run: hangars(60, 120, 180) },
   { at: 3900, run: both(cloak(60, 80), cloak(180, 80)) },
@@ -139,11 +131,9 @@ export const STAGE6: Stage = {
   length: 4800,
   waves: WAVES,
   ground: {
-    sets: ['space_nebula', 'nebula_rock', 'rock_hull'],
+    sets: ['space_hull'],
     colors: [
       ['#04040c', '#080818', '#020208'],
-      ['#2a1848', '#38205c', '#1c1034'],
-      ['#3a3634', '#4a4442', '#2a2624'],
       ['#7c8494', '#9098a8', '#5c6474'],
     ],
     water: false,

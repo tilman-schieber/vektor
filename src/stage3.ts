@@ -1,6 +1,6 @@
 // Stage 3: the arctic. Over the polar sea and its floes, across the pack ice and the snowfield,
 // over the naval base and out to the anchorage, where the battleship lies.
-import { Stage, Wave, dive, sweep, swoop, gun, cargo, tanks, pillbox, battery, scramble, heavy, swarm, ship, chopper, loops, hatch, both } from './stage';
+import { Stage, Wave, dive, sweep, swoop, gun, cargo, tanks, pillbox, battery, scramble, heavy, swarm, ship, chopper, loops, cross, hatch, both } from './stage';
 import { breaker } from './mid';
 import { COLS, TILE, noise } from './terrain';
 import { BATTLESHIP } from './boss';
@@ -47,18 +47,13 @@ const leadShip = (w: World) => {
 };
 
 const WAVES: Wave[] = [
-  // In the pack ice, an icebreaker.
-  { at: 1800, run: breaker() },
+  // Out on the polar sea, an icebreaker.
+  { at: 440, run: breaker() },
   // The polar sea.
   { at: 60, run: swarm(120) },
   { at: 200, run: ship(60) },
   { at: 260, run: dive(180, 5) },
   { at: 360, run: both(cargo(120), ship(190, 0.3)) },
-  { at: 480, run: swarm(70, 6) },
-  { at: 520, run: swarm(170, 6) },
-  { at: 640, run: both(ship(40, 0.2, 0.15), ship(200, 0.2, -0.15)) },
-  { at: 760, run: gun(120, 70) },
-  { at: 860, run: scramble(3) },
   // The pack ice.
   { at: 960, run: leadShip },
   { at: 1040, run: both(sweep(true, 80), cargo(180, 'missile')) },
@@ -69,7 +64,12 @@ const WAVES: Wave[] = [
   { at: 1540, run: leadShip },
   { at: 1620, run: heavy(120, 'bomb') },
   // The snowfield.
+  { at: 1800, run: both(tanks(40, 4), tanks(200, 4)) },
+  { at: 1900, run: scramble(4, 60) },
+  { at: 2000, run: both(battery(60), battery(180)) },
   { at: 2100, run: cargo(80) },
+  { at: 2180, run: swarm(160, 8) },
+  { at: 2220, run: both(chopper(200, 70), cross(2)) },
   { at: 2300, run: both(tanks(-12, 4, 0.6, 0, 100), dive(180, 5)) },
   { at: 2420, run: both(gun(70, 60), gun(170, 90)) },
   { at: 2600, run: both(pillbox(40), battery(120), pillbox(200)) },
@@ -93,7 +93,6 @@ const WAVES: Wave[] = [
   { at: 4340, run: ship(120, 0.2) },
   { at: 4420, run: cargo(120, 'bomb') },
   // More variety: helicopters, aerobatics, hatches.
-  { at: 420, run: loops(180, 4, 110) },
   { at: 1380, run: chopper(40, 90) },
   { at: 3300, run: hatch(60, 180) },
   { at: 3700, run: loops(60, 5, 130) },
