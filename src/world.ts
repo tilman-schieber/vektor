@@ -16,6 +16,8 @@ export const MAX_BOMBS = 7;
 /** Extra lives at these scores. */
 export const EXTENDS = [200000, 500000];
 const START_BOMBS = 3;
+/** Easy mode: frames until a broken shield comes back. */
+export const SHIELD_REGEN = 20 * 60;
 
 export interface Player {
   x: number;
@@ -33,6 +35,10 @@ export interface Player {
   bank: number;
   cooldown: number;
   missileCooldown: number;
+  /** Easy mode: the shield is up. */
+  shield: boolean;
+  /** Frames until a broken shield is back, 0 when up or not in this mode. */
+  shieldT: number;
 }
 
 export interface Shot {
@@ -157,9 +163,13 @@ export class World {
   private waveIdx = 0;
   private later: { at: number; fn: () => void }[] = [];
 
-  constructor(rng: Rng, lives: number) {
+  /** Easy mode: ships carry a shield. */
+  readonly shielded: boolean;
+
+  constructor(rng: Rng, lives: number, shielded = false) {
     this.rng = rng;
     this.lives = lives;
+    this.shielded = shielded;
     this.terrain = new Terrain(1234, this.stage.ground);
     this.player = this.freshPlayer();
   }
@@ -175,7 +185,7 @@ export class World {
   private freshPlayer(): Player {
     return {
       x: W / 2, y: H - 48, alive: true, timer: 0, invuln: 120, weapon: 'vulcan', level: 1, missiles: 0,
-      bombs: START_BOMBS, bank: 0, cooldown: 0, missileCooldown: 0,
+      bombs: START_BOMBS, bank: 0, cooldown: 0, missileCooldown: 0, shield: this.shielded, shieldT: 0,
     };
   }
 
@@ -298,6 +308,10 @@ export class World {
   private updatePlayer(c: Controls) {
     const p = this.player;
     if (p.invuln > 0) p.invuln--;
+    if (p.shieldT > 0 && --p.shieldT === 0) {
+      p.shield = true;
+      sfx.shieldUp();
+    }
     if (!p.alive) {
       if (--p.timer > 0 || this.lives <= 0) {
         if (this.lives <= 0 && p.timer < -90 && this.state !== 'over') {
@@ -307,7 +321,7 @@ export class World {
         return;
       }
       // Back in from the bottom edge.
-      Object.assign(p, { alive: true, x: W / 2, y: H + 24, timer: 50, invuln: 180, bank: 0 });
+      Object.assign(p, { alive: true, x: W / 2, y: H + 24, timer: 50, invuln: 180, bank: 0, shield: this.shielded, shieldT: 0 });
       return;
     }
     if (p.timer > 0) {
@@ -384,6 +398,18 @@ export class World {
     this.whiteout = 6;
     this.shake = 40;
     sfx.bomb();
+  }
+
+  /** A hit: the shield takes it if it's up, otherwise the ship is lost. */
+  private hitPlayer() {
+    const p = this.player;
+    if (!p.shield) return this.killPlayer();
+    p.shield = false;
+    p.shieldT = SHIELD_REGEN;
+    p.invuln = 90;
+    this.debris(p.x, p.y, 12, '#78d8f8');
+    this.shake = 8;
+    sfx.shieldDown();
   }
 
   private killPlayer() {
@@ -667,12 +693,12 @@ export class World {
     if (!p.alive || p.invuln > 0 || p.timer > 0 || this.state !== 'play') return;
     for (const b of this.bullets) {
       const dx = b.x - p.x, dy = b.y - p.y;
-      if (dx * dx + dy * dy < (b.r + 2) ** 2) return this.killPlayer();
+      if (dx * dx + dy * dy < (b.r + 2) ** 2) return this.hitPlayer();
     }
     for (const e of this.enemies) {
       if (e.def.ground || e.dead) continue;
       const r = (e.r ?? e.def.r) * 0.6 + 2;
-      if (Math.abs(e.x - p.x) < r && Math.abs(e.y - p.y) < r) return this.killPlayer();
+      if (Math.abs(e.x - p.x) < r && Math.abs(e.y - p.y) < r) return this.hitPlayer();
     }
   }
 

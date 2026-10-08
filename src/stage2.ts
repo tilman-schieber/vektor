@@ -47,7 +47,7 @@ const WAVES: Wave[] = [
   // The dunes.
   { at: 60, run: dive(120, 5) },
   { at: 180, run: scramble(3) },
-  { at: 300, run: both(sweep(true, 70), cargo(180)) },
+  { at: 300, run: both(sweep(true, 70), cargo(180, 'medal')) },
   { at: 420, run: tanks(-12, 4, 0.6, 0, 110) },
   { at: 520, run: scramble(4, 60) },
   { at: 640, run: both(swoop(70, 150), swoop(170, 150)) },

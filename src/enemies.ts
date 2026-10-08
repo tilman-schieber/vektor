@@ -145,7 +145,7 @@ const carrier: EnemyDef = {
 const tank: EnemyDef = {
   name: 'tank',
   sprite: 'enemies/tank',
-  hp: 7,
+  hp: 5,
   score: 300,
   r: 9,
   ground: true,

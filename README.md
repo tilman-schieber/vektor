@@ -6,6 +6,8 @@ A vertical-scrolling shooter in the style of the early nineties arcade, built in
 
 Fly north. Stage 1 crosses the open sea, the beach, a jungle river and an enemy base, where a flying fortress waits. Stage 2 crosses the desert: dunes, the canyons of the mesas and a refinery, guarded by a crawler on tracks. Stage 3 goes north: the polar sea, the pack ice, a snowfield and a naval base, out to the anchorage where a battleship lies. Stage 4 is a ruined city at night: the outskirts, downtown, a river, a power plant and the boulevard, where a walking mech comes stomping. Stage 5 is the volcano: basalt fields round a lava lake, lava rivers, the ash plains and a fortress in the crater. Beat all five and it all starts again, faster. You have 3 ships, and one more at 200000 and at 500000 points.
 
+Easy mode (MODE on the title screen) gives the ship a shield that takes the first hit and comes back 20 seconds later; every new ship starts with it up. Easy has its own high score tables (Left/Right on the score screen switches modes).
+
 ## Weapons and items
 
 Carriers drop items when shot down. The weapon orb changes colour while it floats around: catch your own colour to power up, the other one to switch.

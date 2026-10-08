@@ -1,5 +1,5 @@
 import { Game, MENU, MUSIC_NAMES, NAME_LEN, CARD_FRAMES, TALLY_AT } from './game';
-import { World, Shot, Blast, Item, MAX_LEVEL, MAX_MISSILES } from './world';
+import { World, Shot, Blast, Item, MAX_LEVEL, MAX_MISSILES, SHIELD_REGEN } from './world';
 import { Enemy, DESTROYER_GUNS, LAVABOAT_GUN, popupOpen, magmaRise, siloOpen } from './enemies';
 import { aimAt } from './bullets';
 import { Boss } from './boss';
@@ -222,6 +222,23 @@ function drawPlayer(ctx: Ctx, w: World, frame: number) {
   ctx.fillStyle = fl ? '#f8b800' : '#f83800';
   ctx.fillRect(Math.round(p.x) - 1, Math.round(p.y) + 13, 3, 2 + fl);
   drawAt(ctx, spr(name), p.x, p.y);
+  if (p.shield) drawShield(ctx, p.x, p.y, frame);
+}
+
+/** Easy mode's shield: a flickering blue ring round the ship. */
+function drawShield(ctx: Ctx, x: number, y: number, frame: number) {
+  ctx.save();
+  ctx.globalAlpha = 0.75 + Math.sin(frame / 6) * 0.2;
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = '#000';
+  ctx.beginPath();
+  ctx.arc(Math.round(x) + 0.5, Math.round(y) + 1.5, 18, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.strokeStyle = (frame >> 3) % 2 ? '#d8f8f8' : '#78d8f8';
+  ctx.beginPath();
+  ctx.arc(Math.round(x) + 0.5, Math.round(y) + 1.5, 17, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
 }
 
 function drawBoss(ctx: Ctx, b: Boss, frame: number) {
@@ -442,6 +459,14 @@ function drawStatus(ctx: Ctx, w: World, frame: number) {
   ctx.fillRect(x0 + 44, y, 7, 8);
   drawText(ctx, 'M', x0 + 45, y + 1, '#000');
   pips(x0 + 53, p.missiles, MAX_MISSILES, '#58d854', 4);
+  if (!w.shielded) return;
+  // Easy mode: the shield's charge in a thin bar over the panel.
+  ctx.fillStyle = '#000';
+  ctx.fillRect(x0 - 1, y - 5, 81, 4);
+  ctx.fillStyle = '#383838';
+  ctx.fillRect(x0, y - 4, 79, 2);
+  ctx.fillStyle = p.shield ? '#3cbcfc' : '#2058a0';
+  ctx.fillRect(x0, y - 4, Math.round(79 * (p.shield ? 1 : 1 - p.shieldT / SHIELD_REGEN)), 2);
 }
 
 const MINI = ['..#..', '..#..', '.###.', '#####', '#.#.#', '..#..'];
@@ -603,14 +628,15 @@ function renderTitle(ctx: Ctx, game: Game, frame: number) {
   drawLogo(ctx, frame, 40);
   drawTextCentered(ctx, 'STRIKE FIGHTER VEKTOR - SCRAMBLE', W / 2, 92, LIGHT);
 
-  drawBox(ctx, 28, 120, 184, 40);
+  drawBox(ctx, 28, 114, 184, 50);
   const s = game.settings;
   const values: Record<(typeof MENU)[number], string> = {
+    MODE: game.mode.name,
     MUSIC: MUSIC_NAMES[s.music],
     HELP: 'HOW TO PLAY',
   };
   MENU.forEach((row, i) => {
-    const y = 130 + i * 12;
+    const y = 123 + i * 12;
     const on = i === game.menuRow;
     if (on) drawText(ctx, '>', 38, y, YELLOW);
     drawText(ctx, row, 48, y, on ? YELLOW : WHITE);
@@ -640,6 +666,7 @@ function renderScores(ctx: Ctx, game: Game, frame: number) {
   const world = game.scoresGlobal && !entering && !!game.global;
   const title = entering ? 'NEW RECORD!' : world ? 'WORLD SCORES' : 'LOCAL SCORES';
   drawTextCentered(ctx, title, W / 2, 48, entering ? YELLOW : WHITE);
+  drawTextCentered(ctx, entering ? mode.name : `< ${mode.name} >`, W / 2, 59, entering ? LIGHT : GREY);
     const cols: [string, number][] = [['NAME', 40], ['SCORE', 88], ['LP', 150], ['MDL', 172]];
   for (const [label, x] of cols) drawText(ctx, label, x, 72, GREY);
   ctx.fillStyle = '#585858';

@@ -108,6 +108,8 @@ export const sfx = {
       tone(440, 0.2, 'square', 0.1, ctx.currentTime + k * 0.5 + 0.25, 660);
     }
   },
+  shieldDown: () => tone(1200, 0.3, 'sawtooth', 0.16, 0, 150),
+  shieldUp: () => arp([79, 84, 91], 0.05, 0.16, 'triangle'),
   oneUp: () => arp([76, 79, 88, 84, 86, 91], 0.07, 0.22),
   cleared: () => arp([67, 72, 76, 79, 0, 76, 79, 84, 0, 83, 86, 91], 0.08, 0.22),
   tally: () => every('tally', 0.03) && tone(1600, 0.02, 'square', 0.08),

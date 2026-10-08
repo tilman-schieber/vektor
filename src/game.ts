@@ -26,15 +26,17 @@ export interface Settings {
   music: number;
   /** M mutes without changing the selection. */
   muted: boolean;
+  /** Index into MODES. */
+  mode: number;
 }
 
 export const MUSIC_NAMES = ['ON', 'OFF'];
 const MUSIC_OFF = 1;
 
-export const MENU = ['MUSIC', 'HELP'] as const;
+export const MENU = ['MODE', 'MUSIC', 'HELP'] as const;
 export const NAME_LEN = 6;
 const NAME_CHARS = ' ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-const DEFAULT_SETTINGS: Settings = { music: 0, muted: false };
+const DEFAULT_SETTINGS: Settings = { music: 0, muted: false, mode: 0 };
 
 /** Frames the stage card shows at the start of a stage. */
 export const CARD_FRAMES = 180;
@@ -49,6 +51,7 @@ function loadSettings(): Settings {
     const s = { ...DEFAULT_SETTINGS, ...JSON.parse(load('vektor.settings') ?? '{}') };
     s.music = Math.min(MUSIC_NAMES.length - 1, Math.max(0, s.music | 0));
     s.muted = !!s.muted;
+    s.mode = Math.min(MODES.length - 1, Math.max(0, s.mode | 0));
     return s;
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -110,7 +113,7 @@ export class Game {
   }
 
   get mode(): Mode {
-    return MODES[0];
+    return MODES[this.settings.mode];
   }
 
   best(): ScoreEntry | undefined {
@@ -178,6 +181,7 @@ export class Game {
     if (d) {
       const wrap = (v: number, n: number) => (v + d + n) % n;
       if (row === 'MUSIC') s.music = wrap(s.music, MUSIC_NAMES.length);
+      if (row === 'MODE') s.mode = wrap(s.mode, MODES.length);
       sfx.select();
       this.saveSettings();
     }
@@ -206,7 +210,7 @@ export class Game {
 
   startGame() {
     const mode = this.mode;
-    this.world = new World(makeRng(randomSeed()), mode.lives);
+    this.world = new World(makeRng(randomSeed()), mode.lives, mode.shield);
     this.entryRank = -1;
     this.paused = false;
     this.phase = 'play';
@@ -384,6 +388,14 @@ export class Game {
   private stepScores(pressed: Set<Action>) {
     if ((pressed.has('up') || pressed.has('down')) && this.global) {
       this.scoresGlobal = !this.scoresGlobal;
+      sfx.move();
+    }
+    // Left and right page through the modes' tables; the last game's row only marks its own.
+    const d = (pressed.has('right') ? 1 : 0) - (pressed.has('left') ? 1 : 0);
+    if (d) {
+      this.settings.mode = (this.settings.mode + d + MODES.length) % MODES.length;
+      this.saveSettings();
+      this.entryRank = this.globalRank = -1;
       sfx.move();
     }
     if (pressed.has('start') || pressed.has('back') || pressed.has('scores') || pressed.has('fire')) this.toTitle();
