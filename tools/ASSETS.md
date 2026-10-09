@@ -36,6 +36,8 @@ Post-processing (no smooth scaling anywhere):
 
 ## Items (64-candidate grid at 16px, review c1ded2a4…)
 
+**Removed:** the four orbs below were replaced by the weapon pickups (see "Items: weapon pickups") and deleted from the repo; the ids stay here.
+
 | path | prompt (item) | grid frame | object id |
 |---|---|---|---|
 | items/orb_v.png | "glowing red power-up orb sphere" | 12 | 891cda93-e954-4e89-9397-91fee5124f9a |
@@ -451,3 +453,17 @@ Each sketch was drawn on a flat (128,128,128) grey background. The grey was then
 | | gun ports (muzzle) | (-9.5,+34) and (+9.5,+34) | The housing tips are at y=+38. |
 
 Lessons: (1) A stern that tapers to a point reads as "bow up" in a sketch, but the model kept the real submarine shape (pointed stern, round bow), which is correct. (2) For ships the bow shape in the sketch matters most: a blunt sketch bow gave a barge at every strength, while a tapered spoon bow with pre-drawn ice crust worked first time at 170. (3) img2img on an earlier pixflux output (strength ~140 via `init_image_url` = job download URL) adds detail and keeps the composition, which is cheap at 1 generation per try. (4) The creature grids (no style ref, 32 items per creature in 3 sub-prompts) gave many usable heads and bodies. Per-item prompts that say "opening at the bottom" / "snout pointing down" all came out facing down, so no flips were needed.
+
+# Items: weapon pickups
+
+Generations spent: 10 (balance went from 786 to 776). One 64-candidate create_1_direction_object grid at 24px, review 0d6ad78c… (now dismissed; the kept frames carry the tag `weapon_items`). The style ref was ships/player.png cropped to its 28x28 content and nearest-neighbour reduced to 22x22 on a 24x24 canvas. That copy was only used as the style image, never as an output. Grid description: "small floating weapon power-up item seen from directly above, top-down, arcade shmup pickup, single compact object pointing up, symmetrical, black outline, medium shading, transparent background". The items were 3 prompt variants x 4 repeats for each weapon (60), plus 2 extra vulcans and 2 extra bombs. Cleanup used the same method as `clean.py`: alpha binarized, 8-connected clusters under 4px dropped (none were found), and an integer-shift re-centre. No flips were needed because every pick already pointed up. The game draws the glow halo and the bob; the sprites contain only the object.
+
+| path | tool | prompt (item) | grid frame | size | id | notes |
+|---|---|---|---|---|---|---|
+| items/vulcan.png | create_1_direction_object (64-grid, style ref = player 24px) | "compact gatling cannon seen from above, six-barrel rotary gun with barrels pointing up, red armored body with silver steel barrels" | 0 | 24x24 | a3e59b34-aa9b-4ec6-bca1-2a7cc142d65c | Grey rotary barrel cluster on a wide red armoured body. bbox 18x21 at (3,1). Alternative: frame 2 (same design) → d12fd73c-a2d5-44d1-af2b-44f48e4f7603. |
+| items/laser.png | same grid | "sleek futuristic laser ray gun pointing up, white and blue body, glowing bright cyan blue crystal lens at the top tip" | 12 | 24x24 | 3e7160a7-885a-400f-87c0-1ebbd64d5e9a | A white/silver emitter with a blue core and a cyan crystal at the tip. It is narrow, with a bbox of 12x22 at (6,1). Alternative: frame 20 (a chunkier, bluer blaster with side fins, 20x20, but it reads a bit like a rocket) → 05da9ec2-8516-431b-aac1-b091a0a4f180. |
+| items/plasma.png | same grid | "purple tesla tower with stacked coil rings and a bright violet electric orb with white lightning arcs on top" | 32 | 24x24 | 52af88f9-5179-4746-bdfe-37fd14616a8d | Violet stacked coils under a glowing orb with a white centre and lilac spark arcs. The arcs are connected to the orb, so the cleanup keeps them. bbox 14x22 at (5,1). |
+| items/missile.png | same grid | "two green rockets with green warheads and fins side by side on a small grey launcher, pointing up" | 40 | 24x24 | e5ef651e-a491-46e8-b571-8887f3a55e27 | Two grey missiles with green warheads and green fins. bbox 16x21 at (4,1). Alternative: frame 36 (a 3-missile rack, wider at 22x21 but greyer) → 4f1a15cc-a6c6-4a6f-92c4-e2f76a6edda5. |
+| items/bomb.png | same grid | "big round yellow and dark grey mega bomb with four short fins and an orange hazard stripe, nose up" | 56 | 24x24 | 3ac121db-a201-4b07-b79e-5f2b8cdad0d8 | A fat yellow sphere with dark-grey fins, a fuse spike and an orange/dark hazard band. bbox 18x22 at (3,1). |
+
+Lessons: (1) The player ship reduced to a 22px content size kept every candidate at about 18-22px on the 24 canvas, which is the size we wanted. This matches the stage-6 lesson that the style image's content size decides the output size. (2) The 4 repeats of each prompt came out almost identical (only the shading differed), so 3 prompt variants per item gave the real choice. 2 repeats would have been enough. (3) A prompt that leads with the main colour ("yellow and dark grey mega bomb") gave a yellow sprite. "dark grey steel sphere … yellow hazard stripe" (frames 48-51) gave a mostly grey bomb, and "coils" without a colour (frames 24-27) came out red/pink, which would clash with vulcan. (4) The mixed 64-grid cost 10 generations and gave usable results for all five weapons on the first try. The picks were checked on dark, green and light backgrounds and on eight stage tilesets.
