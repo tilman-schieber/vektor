@@ -50,6 +50,17 @@ export const HELP_PAGES: HelpPage[] = [
     ],
   },
   {
+    title: '2 PLAYERS',
+    text: [
+      'SET PLAYERS TO 2 ON THE TITLE SCREEN AND FLY TOGETHER: RED AND BLUE SHARE THE SCORE, EACH WITH THEIR OWN SHIPS, WEAPONS AND BOMBS. IT IS OVER WHEN BOTH ARE OUT.',
+      '',
+      '1P   W A S D, SPACE FIRE, LEFT SHIFT BOMB',
+      '2P   ARROWS, . FIRE, - BOMB',
+      '',
+      'ONE GAMEPAD IS 2P, THE KEYBOARD 1P. TWO GAMEPADS: ONE EACH. ENEMIES ARE TOUGHER FOR TWO.',
+    ],
+  },
+  {
     title: 'CONTROLS',
     text: [
       'ARROWS OR WASD   MOVE',

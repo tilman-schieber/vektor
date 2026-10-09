@@ -44,7 +44,24 @@ const KEYS: Record<string, Action> = {
 };
 
 const game = new Game();
-const input: Input = { held: new Set(), pressed: new Set(), typed: [], dragX: 0, dragY: 0, touching: false };
+const input: Input = { held: new Set(), pressed: new Set(), typed: [], dragX: 0, dragY: 0, touching: false, p2: { held: new Set(), pressed: new Set() } };
+
+// In a 2-player game, by key position: player 2 flies with the arrows, fires with . and bombs
+// with the key right of it (or the right Shift); player 1 keeps W A S D, Space and the left Shift.
+// With exactly one gamepad, though, the pad is player 2 and the whole keyboard player 1's; with
+// two, one each (and the keyboard split as well).
+const P2_KEYS: Record<string, Action> = {
+  ArrowUp: 'up',
+  ArrowDown: 'down',
+  ArrowLeft: 'left',
+  ArrowRight: 'right',
+  Period: 'fire',
+  Slash: 'bomb',
+  ShiftRight: 'bomb',
+};
+/** Player 2's keys and pad count as player 2's only in a 2-player game, while the ships fly. */
+const twoFlying = () => game.settings.players > 1 && (game.phase === 'play' || game.phase === 'clear' || game.phase === 'ending');
+const p2Keys = new Set<string>();
 /** Keys currently down: e.code -> lower-cased e.key at press time (key-up may report a different key). */
 const heldKeys = new Map<string, string>();
 const touchHeld = new Set<TouchButton>();
@@ -54,6 +71,13 @@ const actionFor = (key: string) => (game.phase === 'entry' ? ARROWS[key] ?? (key
 
 addEventListener('keydown', (e) => {
   unlockAudio();
+  const p2 = twoFlying() && game.pads !== 1 ? P2_KEYS[e.code] : undefined;
+  if (p2) {
+    e.preventDefault();
+    p2Keys.add(e.code);
+    if (!e.repeat) input.p2.pressed.add(p2);
+    return;
+  }
   const key = e.key.toLowerCase();
   if (/^[a-z0-9]$/i.test(e.key) && !e.repeat) input.typed.push(e.key.toUpperCase());
   else if (e.key === 'Backspace' || (e.key === 'Enter' && !e.repeat)) input.typed.push(e.key);
@@ -62,11 +86,15 @@ addEventListener('keydown', (e) => {
   heldKeys.set(e.code, key);
   if (!e.repeat && a) input.pressed.add(a);
 });
-addEventListener('keyup', (e) => heldKeys.delete(e.code));
+addEventListener('keyup', (e) => {
+  heldKeys.delete(e.code);
+  p2Keys.delete(e.code);
+});
 // Any tap unlocks sound; mobile browsers only allow it after a gesture.
 for (const ev of ['pointerdown', 'pointerup', 'touchend']) addEventListener(ev, unlockAudio, { passive: true });
 addEventListener('blur', () => {
   heldKeys.clear();
+  p2Keys.clear();
   if (game.phase === 'play' && !game.paused) input.pressed.add('start');
 });
 
@@ -111,22 +139,31 @@ const PAD_BUTTONS: [number, Action][] = [
 ];
 const STICK = 0.4;
 let padHeld = new Set<Action>();
+let pad2Held = new Set<Action>();
 
-function readPads() {
-  const held = new Set<Action>();
-  for (const pad of navigator.getGamepads?.() ?? []) {
-    if (!pad) continue;
+/**
+ * What the pads hold: for player 1 and the menus, and for player 2. In a 2-player game a lone pad
+ * is player 2's, and with two the second is. Start, Select and the scores button always count for
+ * the game, so either player can pause.
+ */
+function readPads(): [Set<Action>, Set<Action>] {
+  const held = new Set<Action>(), held2 = new Set<Action>();
+  const pads = (navigator.getGamepads?.() ?? []).filter((p): p is Gamepad => !!p);
+  game.pads = pads.length;
+  pads.forEach((pad, slot) => {
+    const p2 = twoFlying() && slot === (pads.length === 1 ? 0 : 1);
+    const into = { add: (a: Action) => (p2 && a !== 'start' && a !== 'quit' ? held2 : held).add(a) };
     for (const [i, a] of PAD_BUTTONS) {
       if (!pad.buttons[i]?.pressed) continue;
-      held.add(i === 3 && game.phase === 'title' ? 'scores' : a);
+      into.add(i === 3 && game.phase === 'title' ? 'scores' : a);
     }
     const [x = 0, y = 0] = pad.axes;
-    if (x < -STICK) held.add('left');
-    if (x > STICK) held.add('right');
-    if (y < -STICK) held.add('up');
-    if (y > STICK) held.add('down');
-  }
-  return held;
+    if (x < -STICK) into.add('left');
+    if (x > STICK) into.add('right');
+    if (y < -STICK) into.add('up');
+    if (y > STICK) into.add('down');
+  });
+  return [held, held2];
 }
 
 function refreshHeld() {
@@ -136,7 +173,14 @@ function refreshHeld() {
     if (a) input.held.add(a);
   }
   for (const b of touchHeld) input.held.add(b.a);
-  const pad = readPads();
+  const [pad, pad2] = readPads();
+  input.p2.held.clear();
+  for (const code of p2Keys) input.p2.held.add(P2_KEYS[code]);
+  for (const a of pad2) {
+    input.p2.held.add(a);
+    if (!pad2Held.has(a)) input.p2.pressed.add(a);
+  }
+  pad2Held = pad2;
   for (const a of pad) {
     input.held.add(a);
     if (padHeld.has(a)) continue;
@@ -168,6 +212,7 @@ function loop(now: number) {
     refreshHeld();
     game.step(input);
     input.pressed.clear();
+    input.p2.pressed.clear();
     input.typed.length = 0;
     input.dragX = input.dragY = 0;
     acc -= STEP;
@@ -187,11 +232,11 @@ if (import.meta.env.DEV) {
     skipTo: (d: number) => game.skipTo(d),
     boss: () => game.bossNow(),
     stage: (n: number) => game.gotoStage(n),
-    god: () => game.world && (game.world.player.invuln = 1e9),
+    god: () => game.world && (game.world.god = true),
     /** Runs n frames with these actions held, then draws: for testing in a background tab. */
     sim: (n: number, held: Action[] = []) => {
       frozen = true;
-      const inp: Input = { held: new Set(held), pressed: new Set(), typed: [], dragX: 0, dragY: 0, touching: false };
+      const inp: Input = { held: new Set(held), pressed: new Set(), typed: [], dragX: 0, dragY: 0, touching: false, p2: { held: new Set(), pressed: new Set() } };
       for (let i = 0; i < n; i++) {
         game.step(inp);
         frame++;

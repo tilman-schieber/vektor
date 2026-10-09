@@ -1,4 +1,4 @@
-import { MODES, ModeId } from './modes';
+import { TABLES, TableId } from './modes';
 
 export interface ScoreEntry {
   name: string;
@@ -8,7 +8,7 @@ export interface ScoreEntry {
   medals: number;
 }
 
-export type Tables = Record<ModeId, ScoreEntry[]>;
+export type Tables = Record<TableId, ScoreEntry[]>;
 
 export const MAX_SCORES = 10;
 const KEY = 'vektor.scores';
@@ -38,12 +38,12 @@ export const normalize = (e: ScoreEntry): ScoreEntry => ({
 });
 
 export function loadTables(): Tables {
-  const tables = Object.fromEntries(MODES.map((m) => [m.id, [] as ScoreEntry[]])) as unknown as Tables;
+  const tables = Object.fromEntries(TABLES.map((t) => [t, [] as ScoreEntry[]])) as unknown as Tables;
   try {
     const raw = JSON.parse(load(KEY) ?? '{}');
-    for (const m of MODES) {
-      const list = Array.isArray(raw[m.id]) ? raw[m.id].filter(isEntry).map(normalize) : [];
-      tables[m.id] = list.sort((a: ScoreEntry, b: ScoreEntry) => b.score - a.score).slice(0, MAX_SCORES);
+    for (const m of TABLES) {
+      const list = Array.isArray(raw[m]) ? raw[m].filter(isEntry).map(normalize) : [];
+      tables[m] = list.sort((a: ScoreEntry, b: ScoreEntry) => b.score - a.score).slice(0, MAX_SCORES);
     }
   } catch {}
   return tables;
@@ -71,7 +71,7 @@ const cleanList = (list: unknown) =>
 
 /** A game waiting to reach the world table; the uid lets the server ignore resends. */
 interface Pending {
-  mode: ModeId;
+  mode: TableId;
   entry: ScoreEntry;
   uid: string;
 }
@@ -96,7 +96,7 @@ export async function fetchGlobal(): Promise<Tables | null> {
     const res = await fetch(GLOBAL_URL, { signal: AbortSignal.timeout(TIMEOUT) });
     if (!res.ok) return null;
     const raw = await res.json();
-    return Object.fromEntries(MODES.map((m) => [m.id, cleanList(raw[m.id])])) as unknown as Tables;
+    return Object.fromEntries(TABLES.map((t) => [t, cleanList(raw[t])])) as unknown as Tables;
   } catch {
     return null;
   }
@@ -123,7 +123,7 @@ async function post(p: Pending): Promise<Sent | 'retry' | 'drop'> {
 }
 
 /** Sends a finished game; returns its world rank (-1 outside the top 10) and the new top 10, or null if it was queued. */
-export async function submitGlobal(mode: ModeId, entry: ScoreEntry): Promise<Sent | null> {
+export async function submitGlobal(mode: TableId, entry: ScoreEntry): Promise<Sent | null> {
   const p: Pending = { mode, entry: { ...entry }, uid: newUid() };
   const res = await post(p);
   if (res === 'retry') savePending([...loadPending(), p]);

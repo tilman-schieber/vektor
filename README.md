@@ -6,6 +6,8 @@ A vertical-scrolling shooter in the style of the early nineties arcade, built in
 
 Fly north. Stage 1 crosses the open sea, the beach, a jungle river and an enemy base, where a flying fortress waits. Stage 2 crosses the desert: dunes, the canyons of the mesas and a refinery, guarded by a crawler on tracks. Stage 3 goes north: the polar sea, the pack ice, a snowfield and a naval base, out to the anchorage where a battleship lies. Stage 4 is a ruined city at night: the outskirts, downtown, a river, a power plant and the boulevard, where a walking mech comes stomping. Stage 5 is the volcano: basalt fields round a lava lake, lava rivers, the ash plains and a fortress in the crater. Stage 6 climbs into orbit: open space and nebulae, a field of drifting asteroids, the defence ring with its laser fences, and a station built into an asteroid, where the mothership waits. Beat all six and the ending rolls; then it all starts again, faster. You have 3 ships, and one more at 200000 and at 500000 points.
 
+Two can play at once (PLAYERS on the title screen): red and blue fly together and share the score, each with their own ships, weapons, missiles and bombs, and it is over when both are out. Player 1 flies with W A S D, fires with Space and bombs with the left Shift; player 2 uses the arrows, `.` to fire and the key right of it (`-` on a German keyboard, `/` on a US one) or the right Shift to bomb. With one gamepad, the gamepad is player 2 and the whole keyboard player 1's (W A S D or the arrows); with two, one each. Start on any gamepad pauses. The title screen shows who flies with what (browsers only report a gamepad once a button on it has been pressed). Enemies go for whichever ship is nearer, and an item goes to whoever catches it. To keep it a fight, enemies and bosses take half as much again to shoot down, and every stage has one more carrier, as two ships share the orbs. 2-player games have their own high score tables.
+
 Easy mode (MODE on the title screen) gives the ship a shield that takes the first hit and comes back 20 seconds later; every new ship starts with it up. Easy has its own high score tables (Left/Right on the score screen switches modes).
 
 ## Weapons and items
@@ -73,4 +75,5 @@ npm run playtest -- --runs 20                                     # 20 campaigns
 npm run playtest -- --stages 4 --start-power 3,2 --runs 10        # stage 4 alone, starting at level 3 with 2 missiles
 npm run playtest -- --god --start-power 3,2 --boss-only --runs 5  # boss fights at level 3 with 2 missiles; hits counted, not taken
 npm run playtest -- --stages 2 --skill 0.4 --shots shots          # a weaker player, with a screenshot at every death
+npm run playtest -- --players 2 --runs 20                         # a 2-player game, two bots flying one ship each
 ```

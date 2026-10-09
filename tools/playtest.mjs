@@ -16,6 +16,7 @@
 //   --weapon vulcan|laser  weapon the bot prefers (it leaves orbs of the other colour); with L,M also the
 //                          starting weapon. Default: no preference, takes every orb
 //   --skill 0..1           0 sluggish and sloppy, 1 sharp (default 0.7)
+//   --players 1|2          one ship, or two flown by two bots in a 2-player game (default 1)
 //   --bombs on|off         whether the bot bombs its way out when cornered (default on, off with --god)
 //   --shots DIR            save a PNG of the screen at each death and when each boss arrives
 //   --headful              show the browser
@@ -39,7 +40,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
 
 function parseArgs(argv) {
-  const o = { stages: '1-6', runs: 1, seed: 1, startPower: 'auto', mode: 'normal', god: false, bossOnly: false, weapon: null, skill: 0.7, bombs: null, shots: null, headful: false, url: null, out: null, batch: 6000 };
+  const o = { stages: '1-6', runs: 1, seed: 1, startPower: 'auto', mode: 'normal', god: false, bossOnly: false, weapon: null, skill: 0.7, players: 1, bombs: null, shots: null, headful: false, url: null, out: null, batch: 6000 };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i], v = () => argv[++i];
     if (a === '--stages') o.stages = v();
@@ -51,6 +52,7 @@ function parseArgs(argv) {
     else if (a === '--boss-only') o.bossOnly = true;
     else if (a === '--weapon') o.weapon = v();
     else if (a === '--skill') o.skill = +v();
+    else if (a === '--players') o.players = +v();
     else if (a === '--bombs') o.bombs = v() !== 'off';
     else if (a === '--shots') o.shots = resolve(v());
     else if (a === '--headful') o.headful = true;
@@ -78,6 +80,7 @@ function parseArgs(argv) {
   if (o.bossOnly && !o.power) throw new Error('--boss-only needs --start-power L,M');
   if (o.weapon && !['vulcan', 'laser'].includes(o.weapon)) throw new Error(`bad --weapon ${o.weapon}`);
   if (!(o.skill >= 0 && o.skill <= 1)) throw new Error(`bad --skill ${o.skill}`);
+  if (o.players !== 1 && o.players !== 2) throw new Error(`bad --players ${o.players}`);
   return o;
 }
 
@@ -148,7 +151,7 @@ async function main() {
     const runs = [];
     const t0 = Date.now();
     for (const j of jobs(o)) {
-      const cfg = { seed: j.worldSeed, first: j.first, last: j.last, power: o.power ?? null, bossOnly: o.bossOnly, weapon: o.weapon, mode: o.mode, god: o.god, bombs: o.bombs, skill: o.skill, shots: !!o.shots };
+      const cfg = { seed: j.worldSeed, first: j.first, last: j.last, power: o.power ?? null, bossOnly: o.bossOnly, weapon: o.weapon, mode: o.mode, god: o.god, bombs: o.bombs, skill: o.skill, players: o.players, shots: !!o.shots };
       await page.evaluate((c) => window.__playtest.start(c), cfg);
       const tj = Date.now();
       let res;
@@ -165,7 +168,7 @@ async function main() {
     }
 
     const summary = summarize(runs);
-    console.log(`\nVEKTOR playtest: stages ${o.stages}, ${o.runs} run(s), seed ${o.seed}, start power ${o.startPower}${o.bossOnly ? ', boss only' : ''}, ${o.mode}${o.god ? ', god' : ''}, skill ${o.skill}, bombs ${o.bombs ? 'on' : 'off'}${o.weapon ? `, prefers ${o.weapon}` : ''} (${((Date.now() - t0) / 1000).toFixed(1)}s)\n`);
+    console.log(`\nVEKTOR playtest: stages ${o.stages}, ${o.runs} run(s), seed ${o.seed}, start power ${o.startPower}${o.bossOnly ? ', boss only' : ''}, ${o.mode}${o.players > 1 ? ', 2 players' : ''}${o.god ? ', god' : ''}, skill ${o.skill}, bombs ${o.bombs ? 'on' : 'off'}${o.weapon ? `, prefers ${o.weapon}` : ''} (${((Date.now() - t0) / 1000).toFixed(1)}s)\n`);
     console.log(printSummary(summary, { god: o.god, shield: o.mode === 'easy' }));
 
     const outFile = o.out ?? join(HERE, 'playtest/out', `${new Date().toISOString().replace(/[:.]/g, '-')}.json`);

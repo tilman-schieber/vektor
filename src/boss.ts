@@ -1,6 +1,6 @@
 // Stage bosses. Every boss has the same three acts: phase 1 its gun pods, phase 2 the opened
 // core, phase 3 the core in a rage below half health. A BossDef gives the layout and the patterns.
-import type { World } from './world';
+import type { World, Player } from './world';
 import { ENEMIES, Enemy } from './enemies';
 import { aimed, aimAt, fan, ring, shoot, canFire, lob, flame, needle, needles, frost, bomb } from './bullets';
 import { sfx } from './audio';
@@ -222,7 +222,7 @@ export const FORTRESS: BossDef = {
     const c = b.core;
     // Escort fighters launch in pairs off the rear deck and swoop down at you.
     const escorts = (every: number) => {
-      if (b.t % every !== every - 1 || !w.player.alive) return;
+      if (b.t % every !== every - 1 || !w.anyAlive) return;
       for (const side of [-1, 1]) {
         const e = w.spawn(ENEMIES.fighter, b.x + side * 20, b.y - 30, [2, 190 + side * 10, 20]);
         e.seen = true;
@@ -281,7 +281,7 @@ export const CRAWLER: BossDef = {
     const c = b.core;
     // It grinds back and forth on its tracks; once open it turns to follow you, faster in a rage.
     if (b.phase === 1) b.x = W / 2 + Math.sin(b.t / 140) * 22;
-    else b.x += Math.max(-1, Math.min(1, (w.player.x - b.x) * 0.01)) * (b.phase === 3 ? 0.7 : 0.35);
+    else b.x += Math.max(-1, Math.min(1, (w.target(b.x, b.y).x - b.x) * 0.01)) * (b.phase === 3 ? 0.7 : 0.35);
     b.x = Math.max(W / 2 - 60, Math.min(W / 2 + 60, b.x));
     b.y = 90 + Math.sin(b.t / 70) * 8;
     if (b.phase === 1) {
@@ -416,7 +416,7 @@ export const WALKER: BossDef = {
       // A searchlight on its head sweeps the street. Caught in it, the cannons open up.
       b.light = Math.sin(b.t / 75) * 0.75;
       const [hx, hy] = walkerHead(b);
-      const lit = w.player.alive && w.player.y > hy && Math.abs(aimAt(w, hx, hy) - b.light) < LIGHT_SPREAD;
+      const lit = w.players.some((p) => p.alive && p.y > hy && Math.abs(Math.atan2(p.x - hx, p.y - hy) - b.light!) < LIGHT_SPREAD);
       b.spotted = lit ? b.spotted + 1 : Math.max(0, b.spotted - 2);
       if (b.spotted === SPOTTED) sfx.spotted();
       [0, 1].forEach((i) => {
@@ -442,7 +442,7 @@ export const WALKER: BossDef = {
       if (beam.t === BEAM_AIM) sfx.beam();
       if (beam.t >= BEAM_AIM) {
         w.shake = Math.max(w.shake, 2);
-        if (beamHits(w, c.x, c.y + 8, beam.ang)) w.hurt();
+        for (const p of w.players) if (beamHits(p, c.x, c.y + 8, beam.ang)) w.hurt(p);
       }
       if (++beam.t >= BEAM_AIM + BEAM_FIRE) b.beam = null;
     }
@@ -452,9 +452,12 @@ export const WALKER: BossDef = {
       if (b.t % 120 === 60) ring(w, c.x, c.y, 12 + w.loop * 2, 1.3, b.t / 30);
     } else {
       // In a rage it also calls down mortars: a marker where each shell will land, then the blast.
-      if (b.t % 40 === 20 && w.player.alive) {
-        const x = Math.max(16, Math.min(W - 16, w.player.x + (w.rng() - 0.5) * 70));
-        const y = Math.max(140, Math.min(H - 30, w.player.y + (w.rng() - 0.5) * 50));
+      if (b.t % 40 === 20 && w.anyAlive) {
+        // Round a ship still flying, each in turn.
+        const alive = w.players.filter((p) => p.alive);
+        const p = alive[Math.floor(b.t / 40) % alive.length];
+        const x = Math.max(16, Math.min(W - 16, p.x + (w.rng() - 0.5) * 70));
+        const y = Math.max(140, Math.min(H - 30, p.y + (w.rng() - 0.5) * 50));
         b.marks.push({ x, y, t: 0 });
         sfx.mortar();
       }
@@ -463,7 +466,7 @@ export const WALKER: BossDef = {
       if (++m.t < MORTAR_FUSE) continue;
       w.blast(m.x, m.y, false, true);
       w.debris(m.x, m.y, 8, '#8a7050');
-      if (Math.hypot(w.player.x - m.x, w.player.y - m.y) < MORTAR_R) w.hurt();
+      for (const p of w.players) if (Math.hypot(p.x - m.x, p.y - m.y) < MORTAR_R) w.hurt(p);
     }
     b.marks = b.marks.filter((m) => m.t < MORTAR_FUSE);
   },
@@ -485,8 +488,8 @@ export const MORTAR_R = 16;
 /** Where the walker's searchlight sits. */
 export const walkerHead = (b: Boss): [number, number] => [b.x, b.y - 24];
 
-function beamHits(w: World, x: number, y: number, ang: number) {
-  const dx = w.player.x - x, dy = w.player.y - y;
+function beamHits(p: Player, x: number, y: number, ang: number) {
+  const dx = p.x - x, dy = p.y - y;
   const along = dx * Math.sin(ang) + dy * Math.cos(ang);
   return along > 0 && Math.abs(dx * Math.cos(ang) - dy * Math.sin(ang)) < BEAM_HALF;
 }
@@ -526,7 +529,7 @@ export const CRATER: BossDef = {
       // The racks launch homing rockets in turn.
       [2, 3].forEach((i) => {
         const pod = b.pods[i];
-        if (pod.dead || (b.t + (i - 2) * 90) % 180 !== 0 || !w.player.alive) return;
+        if (pod.dead || (b.t + (i - 2) * 90) % 180 !== 0 || !w.anyAlive) return;
         const r = w.spawn(ENEMIES.rocket, pod.x, pod.y + 10, []);
         r.aim = aimAt(w, pod.x, pod.y);
         r.seen = true;
@@ -588,7 +591,7 @@ export const MOTHERSHIP: BossDef = {
         for (let k = 0; k < 5; k++) w.after(k * 6, () => !fr.dead && frost(w, fr.x, fr.y + 10, a, 1.9, 0.45));
       }
       // And it launches raiders from its flanks.
-      if (b.t % 300 === 299 && w.player.alive)
+      if (b.t % 300 === 299 && w.anyAlive)
         for (const side of [-1, 1]) w.spawn(ENEMIES.raider, b.x + side * 70, b.y, [2, 200, 15]).seen = true;
     } else if (b.phase === 2) {
       // Twin beams that close like scissors toward the middle, then open again: under it is safe, until
@@ -602,7 +605,7 @@ export const MOTHERSHIP: BossDef = {
           beam.ang = SCISSOR_OPEN - (SCISSOR_OPEN - SCISSOR_SHUT) * Math.sin(Math.PI * f);
           if (beam.t === BEAM_AIM) sfx.beam();
           w.shake = Math.max(w.shake, 2);
-          if (beamHits(w, c.x, c.y + 8, beam.ang) || beamHits(w, c.x, c.y + 8, -beam.ang)) w.hurt();
+          for (const p of w.players) if (beamHits(p, c.x, c.y + 8, beam.ang) || beamHits(p, c.x, c.y + 8, -beam.ang)) w.hurt(p);
         }
         if (++beam.t >= BEAM_AIM + SCISSOR_FRAMES) b.beam = null;
         if (beam.t > BEAM_AIM && beam.t % 40 === 0) aimed(w, c.x, c.y + 10, 1, 0, 2.2);
@@ -620,7 +623,7 @@ export const MOTHERSHIP: BossDef = {
       }
       if (b.mega > 0) {
         if (--b.mega % 4 === 0) w.shake = Math.max(w.shake, 6);
-        w.hurt();
+        for (const p of w.players) w.hurt(p);
         return;
       }
       if (b.charge) {

@@ -1,4 +1,4 @@
-import { MODES, Mode } from './modes';
+import { MODES, Mode, TABLES, TableId, tableId } from './modes';
 import { loadTables, saveTables, rankFor, ScoreEntry, Tables, MAX_SCORES, load, save, fetchGlobal, submitGlobal, flushPending } from './scores';
 import { sfx, music, TUNE, stageTune, bossKey } from './audio';
 import { makeRng, randomSeed } from './rng';
@@ -18,6 +18,8 @@ export interface Input {
   dragY: number;
   /** A finger is on the screen: fire. */
   touching: boolean;
+  /** Player 2's flying, firing and bombing in a 2-player game. */
+  p2: { held: Set<Action>; pressed: Set<Action> };
 }
 
 export type Phase = 'title' | 'play' | 'clear' | 'ending' | 'over' | 'entry' | 'scores' | 'help';
@@ -29,15 +31,17 @@ export interface Settings {
   muted: boolean;
   /** Index into MODES. */
   mode: number;
+  /** 1 or 2 players. */
+  players: number;
 }
 
 export const MUSIC_NAMES = ['ON', 'OFF'];
 const MUSIC_OFF = 1;
 
-export const MENU = ['MODE', 'MUSIC', 'HELP'] as const;
+export const MENU = ['MODE', 'PLAYERS', 'MUSIC', 'HELP'] as const;
 export const NAME_LEN = 6;
 const NAME_CHARS = ' ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-const DEFAULT_SETTINGS: Settings = { music: 0, muted: false, mode: 0 };
+const DEFAULT_SETTINGS: Settings = { music: 0, muted: false, mode: 0, players: 1 };
 
 /** Frames the stage card shows at the start of a stage. */
 export const CARD_FRAMES = 180;
@@ -55,6 +59,7 @@ function loadSettings(): Settings {
     s.music = Math.min(MUSIC_NAMES.length - 1, Math.max(0, s.music | 0));
     s.muted = !!s.muted;
     s.mode = Math.min(MODES.length - 1, Math.max(0, s.mode | 0));
+    s.players = s.players === 2 ? 2 : 1;
     return s;
   } catch {
     return { ...DEFAULT_SETTINGS };
@@ -86,6 +91,8 @@ export class Game {
   private entryFresh = false;
 
   helpPage = 0;
+  /** Gamepads connected: in a 2-player game that decides who flies with what. */
+  pads = 0;
   /** Started with ?debug in the URL: cheat keys in play, and no high scores. */
   readonly debug = typeof location !== 'undefined' && new URLSearchParams(location.search).has('debug');
   /** Scroll of the terrain behind the menus. */
@@ -108,10 +115,10 @@ export class Game {
 
   /** Posts a finished game to the world table and marks where it landed. */
   private async submitGlobal(e: ScoreEntry) {
-    const mode = this.mode.id;
+    const mode = this.table;
     const res = await submitGlobal(mode, e);
     if (!res) return;
-    this.global ??= Object.fromEntries(MODES.map((m) => [m.id, []])) as unknown as Tables;
+    this.global ??= Object.fromEntries(TABLES.map((t) => [t, []])) as unknown as Tables;
     this.global[mode] = res.top;
     this.globalState = 'ok';
     this.globalRank = res.rank;
@@ -121,8 +128,18 @@ export class Game {
     return MODES[this.settings.mode];
   }
 
+  /** The high score table this game goes into: the mode, and 1 or 2 players. */
+  get table(): TableId {
+    return tableId(this.mode, this.settings.players);
+  }
+
+  /** The table's name: NORMAL, or NORMAL 2P. */
+  get tableName() {
+    return this.mode.name + (this.settings.players > 1 ? ' 2P' : '');
+  }
+
   best(): ScoreEntry | undefined {
-    return this.tables[this.mode.id]?.[0];
+    return this.tables[this.table]?.[0];
   }
 
   step(input: Input) {
@@ -189,6 +206,7 @@ export class Game {
       const wrap = (v: number, n: number) => (v + d + n) % n;
       if (row === 'MUSIC') s.music = wrap(s.music, MUSIC_NAMES.length);
       if (row === 'MODE') s.mode = wrap(s.mode, MODES.length);
+      if (row === 'PLAYERS') s.players = wrap(s.players - 1, 2) + 1;
       sfx.select();
       this.saveSettings();
     }
@@ -217,7 +235,7 @@ export class Game {
 
   startGame() {
     const mode = this.mode;
-    this.world = new World(makeRng(randomSeed()), mode.lives, mode.shield);
+    this.world = new World(makeRng(randomSeed()), mode.lives, mode.shield, this.settings.players);
     this.entryRank = -1;
     this.paused = false;
     this.phase = 'play';
@@ -225,17 +243,20 @@ export class Game {
     sfx.start();
   }
 
-  private controls(input: Input, live = true): Controls {
-    const h = input.held;
-    const axis = (neg: Action, pos: Action) => (h.has(pos) ? 1 : 0) - (h.has(neg) ? 1 : 0);
-    return {
-      dx: live ? axis('left', 'right') : 0,
-      dy: live ? axis('up', 'down') : 0,
-      dragX: live ? input.dragX : 0,
-      dragY: live ? input.dragY : 0,
-      fire: live && (h.has('fire') || input.touching),
-      bomb: live && input.pressed.has('bomb'),
+  /** Each player's controls: player 1 from the main input (and touch), player 2 from its own. */
+  private controls(input: Input, live = true): Controls[] {
+    const ship = (h: Set<Action>, pressed: Set<Action>, touch: boolean): Controls => {
+      const axis = (neg: Action, pos: Action) => (h.has(pos) ? 1 : 0) - (h.has(neg) ? 1 : 0);
+      return {
+        dx: live ? axis('left', 'right') : 0,
+        dy: live ? axis('up', 'down') : 0,
+        dragX: live && touch ? input.dragX : 0,
+        dragY: live && touch ? input.dragY : 0,
+        fire: live && (h.has('fire') || (touch && input.touching)),
+        bomb: live && pressed.has('bomb'),
+      };
     };
+    return [ship(input.held, input.pressed, true), ship(input.p2.held, input.p2.pressed, false)];
   }
 
   /** Stage tune that swells as the stage goes on; the boss gets its own. */
@@ -275,9 +296,10 @@ export class Game {
     if (w.state === 'clear') {
       this.phase = 'clear';
       this.timer = 0;
+      const bombs = w.players.reduce((n, p) => n + p.bombs, 0);
       this.tally = [
         ['NO-MISS BONUS', w.misses === 0 ? NO_MISS_BONUS * w.loop : 0],
-        [`BOMBS ${w.player.bombs} X ${BOMB_BONUS}`, w.player.bombs * BOMB_BONUS],
+        [`BOMBS ${bombs} X ${BOMB_BONUS}`, bombs * BOMB_BONUS],
       ];
     } else if (w.state === 'over') this.gameOver();
   }
@@ -344,7 +366,7 @@ export class Game {
     this.scoresGlobal = !!this.global;
     if (w.score <= 0 || this.debug) return;
     const entry: ScoreEntry = { name: '', score: w.score, loop: w.loop, medals: w.medals };
-    const list = this.tables[this.mode.id];
+    const list = this.tables[this.table];
     const at = rankFor(list, entry);
     const last = (load('vektor.name') ?? '').slice(0, NAME_LEN);
     if (at < 0) {
@@ -394,7 +416,7 @@ export class Game {
 
   private commitName() {
     const name = this.entryName.join('').trim() || '------';
-    const entry = this.tables[this.mode.id][this.entryRank];
+    const entry = this.tables[this.table][this.entryRank];
     entry.name = name;
     saveTables(this.tables);
     save('vektor.name', name);
@@ -418,7 +440,11 @@ export class Game {
     // Left and right page through the modes' tables; the last game's row only marks its own.
     const d = (pressed.has('right') ? 1 : 0) - (pressed.has('left') ? 1 : 0);
     if (d) {
-      this.settings.mode = (this.settings.mode + d + MODES.length) % MODES.length;
+      // Through every table: each mode for 1 player, then for 2.
+      const n = MODES.length * 2;
+      const i = ((this.settings.players - 1) * MODES.length + this.settings.mode + d + n) % n;
+      this.settings.mode = i % MODES.length;
+      this.settings.players = i >= MODES.length ? 2 : 1;
       this.saveSettings();
       this.entryRank = this.globalRank = -1;
       sfx.move();
@@ -431,14 +457,13 @@ export class Game {
   /** 1-6 stage, N next stage, B boss, U full power, I invincible, V switch weapon. */
   private debugKeys(typed: string[]) {
     const w = this.world!;
-    const p = w.player;
     for (const k of typed) {
       if (k >= '1' && k <= String(STAGES.length)) this.gotoStage(Number(k));
       else if (k === 'N') this.gotoStage(w.stageIdx + 2);
       else if (k === 'B') this.bossNow();
-      else if (k === 'U') Object.assign(p, { level: MAX_LEVEL, missiles: MAX_MISSILES, bombs: MAX_BOMBS });
+      else if (k === 'U') for (const p of w.players) Object.assign(p, { level: MAX_LEVEL, missiles: MAX_MISSILES, bombs: MAX_BOMBS });
       else if (k === 'I') w.god = !w.god;
-      else if (k === 'V') p.weapon = p.weapon === 'vulcan' ? 'laser' : 'vulcan';
+      else if (k === 'V') for (const p of w.players) p.weapon = p.weapon === 'vulcan' ? 'laser' : 'vulcan';
       else continue;
       sfx.select();
     }

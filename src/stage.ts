@@ -60,7 +60,7 @@ export const battery = (x: number, medal = true): Run => (w) => void w.spawn(art
  * away from the player, so they never appear underneath the ship.
  */
 export const scramble = (n = 3, turn = 70): Run => (w) => {
-  const x = w.player.x < W / 2 ? W - 36 : 36;
+  const x = w.target(W / 2, H).x < W / 2 ? W - 36 : 36;
   for (let k = 0; k < n; k++) w.after(k * 14, () => w.spawn(interceptor, x + (x < W / 2 ? k : -k) * 14, H + 14, [0, turn + k * 12]));
 };
 

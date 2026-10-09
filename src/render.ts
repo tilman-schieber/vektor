@@ -1,5 +1,5 @@
 import { Game, MENU, MUSIC_NAMES, NAME_LEN, CARD_FRAMES, TALLY_AT } from './game';
-import { World, Shot, Blast, Item, MAX_LEVEL, MAX_MISSILES, SHIELD_REGEN, WARNING_FRAMES } from './world';
+import { World, Player, Shot, Blast, Item, MAX_LEVEL, MAX_MISSILES, SHIELD_REGEN, WARNING_FRAMES } from './world';
 import { Enemy, DESTROYER_GUNS, LAVABOAT_GUN, popupOpen, magmaRise, siloOpen, hangarOpen, GRAVITY_R, STEALTH_SHOW } from './enemies';
 import { aimAt } from './bullets';
 import { SUB_CYCLE, SUB_UP, SUB_DOWN, ICEBREAKER_GUNS, CHOPPER_HUB, SHIELD_R, SHIELD_GAP, shieldGap } from './mid';
@@ -290,8 +290,7 @@ function drawBullets(ctx: Ctx, w: World, frame: number) {
   }
 }
 
-function drawPlayer(ctx: Ctx, w: World, frame: number) {
-  const p = w.player;
+function drawPlayer(ctx: Ctx, p: Player, frame: number) {
   if (!p.alive) return;
   if (p.invuln > 0 && p.invuln < 1e6 && (frame >> 2) % 2) return;
   let name = 'ships/player';
@@ -301,8 +300,35 @@ function drawPlayer(ctx: Ctx, w: World, frame: number) {
   const fl = frame % 3;
   ctx.fillStyle = fl ? '#f8b800' : '#f83800';
   ctx.fillRect(Math.round(p.x) - 1, Math.round(p.y) + 13, 3, 2 + fl);
-  drawAt(ctx, spr(name), p.x, p.y);
+  drawAt(ctx, p.id ? blueShip(name) : spr(name), p.x, p.y);
   if (p.shield) drawShield(ctx, p.x, p.y, frame);
+}
+
+const blueShips = new Map<string, HTMLCanvasElement>();
+/** Player 2's ship: player 1's, its reds turned blue. */
+function blueShip(name: string) {
+  let c = blueShips.get(name);
+  if (c) return c;
+  const src = spr(name);
+  c = document.createElement('canvas');
+  c.width = src.width;
+  c.height = src.height;
+  const g = c.getContext('2d')!;
+  g.drawImage(src, 0, 0);
+  const img = g.getImageData(0, 0, c.width, c.height);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const [r, gr, b] = [d[i], d[i + 1], d[i + 2]];
+    // Reddish pixels swap red and blue; greys and whites stay.
+    if (r > gr + 30 && r > b + 30) {
+      d[i] = b;
+      d[i + 1] = Math.min(255, gr + (r - gr) * 0.35);
+      d[i + 2] = r;
+    }
+  }
+  g.putImageData(img, 0, 0);
+  blueShips.set(name, c);
+  return c;
 }
 
 /** Easy mode's shield: a flickering blue ring round the ship. */
@@ -676,7 +702,7 @@ function drawWorld(ctx: Ctx, w: World, frame: number) {
   if (!w.terrain.ground.space) {
     for (const e of w.enemies) if (!e.def.ground && e.def.sprite && !e.hidden) drawShadow(ctx, e.def.sprite, e.x, e.y);
     if (b && !b.gone && !b.def.ground) drawShadow(ctx, b.open ? b.def.openSprite : b.def.sprite, b.x, b.y, 2);
-    if (w.player.alive) drawShadow(ctx, 'ships/player', w.player.x, w.player.y);
+    for (const p of w.players) if (p.alive) drawShadow(ctx, 'ships/player', p.x, p.y);
   }
   drawFields(ctx, w, frame);
 
@@ -715,7 +741,7 @@ function drawWorld(ctx: Ctx, w: World, frame: number) {
     ctx.fillStyle = q.color;
     ctx.fillRect(Math.round(q.x), Math.round(q.y), 1 + (q.life > 25 ? 1 : 0), 1 + (q.life > 25 ? 1 : 0));
   }
-  drawPlayer(ctx, w, frame);
+  for (const p of w.players) drawPlayer(ctx, p, frame);
   drawBullets(ctx, w, frame);
   if (w.boss) drawBossBeam(ctx, w.boss, frame);
   if (w.terrain.ground.ash) drawAsh(ctx, frame);
@@ -741,27 +767,30 @@ function drawWorld(ctx: Ctx, w: World, frame: number) {
 // ---------- HUD ----------
 
 function drawHud(ctx: Ctx, game: Game, w: World, frame: number) {
-  drawTextShadow(ctx, '1P', 4, 4, RED);
+  const two = w.players.length > 1;
+  drawTextShadow(ctx, two ? '2P' : '1P', 4, 4, two ? BLUE : RED);
   drawTextShadow(ctx, pad(w.score, 8), 18, 4);
   const best = Math.max(game.best()?.score ?? 0, w.score);
   drawTextShadow(ctx, 'HI', 150, 4, YELLOW);
   drawTextShadow(ctx, pad(best, 8), 164, 4);
 
-  // Ships in reserve, bottom left.
-  for (let i = 0; i < Math.min(w.lives, 6); i++) drawMiniShip(ctx, 6 + i * 10, H - 12);
-  // Bombs, bottom right.
-  for (let i = 0; i < w.player.bombs; i++) {
-    const x = W - 10 - i * 9, y = H - 12;
-    ctx.fillStyle = '#000';
-    ctx.fillRect(x - 1, y - 1, 7, 10);
-    ctx.fillStyle = YELLOW;
-    ctx.fillRect(x, y, 5, 8);
-    ctx.fillStyle = '#f87800';
-    ctx.fillRect(x, y + 6, 5, 2);
-    ctx.fillStyle = '#000';
-    ctx.fillRect(x + 2, y + 1, 1, 3);
+  if (two) {
+    // Each player's panel in a bottom corner, with their ships and bombs over it.
+    w.players.forEach((p, i) => {
+      const x0 = i ? W - 82 : 3;
+      drawStatus(ctx, w, p, x0, frame);
+      const y = H - 26;
+      drawMiniShip(ctx, x0, y + 1, i ? BLUE : RED);
+      drawText(ctx, String(Math.max(0, p.lives)), x0 + 7, y + 1, WHITE);
+      for (let k = 0; k < p.bombs; k++) drawBombIcon(ctx, x0 + 16 + k * 7, y);
+    });
+  } else {
+    // Ships in reserve, bottom left.
+    for (let i = 0; i < Math.min(w.lives, 6); i++) drawMiniShip(ctx, 6 + i * 10, H - 12);
+    // Bombs, bottom right.
+    for (let i = 0; i < w.player.bombs; i++) drawBombIcon(ctx, W - 10 - i * 9, H - 12);
+    drawStatus(ctx, w, w.player, Math.round(W / 2 - 40), frame);
   }
-  drawStatus(ctx, w, frame);
   if (game.debug) drawTextShadow(ctx, w.god ? 'DEBUG GOD' : 'DEBUG', 4, 24, w.god ? YELLOW : GREY);
 
   const m = w.mid;
@@ -792,11 +821,21 @@ function drawHud(ctx: Ctx, game: Game, w: World, frame: number) {
  * The weapon in a box (V red, L blue) with a pip per level, then the missiles' pips.
  * Full rows blink to say MAX.
  */
-function drawStatus(ctx: Ctx, w: World, frame: number) {
-  const p = w.player;
+function drawBombIcon(ctx: Ctx, x: number, y: number) {
+  ctx.fillStyle = '#000';
+  ctx.fillRect(x - 1, y - 1, 7, 10);
+  ctx.fillStyle = YELLOW;
+  ctx.fillRect(x, y, 5, 8);
+  ctx.fillStyle = '#f87800';
+  ctx.fillRect(x, y + 6, 5, 2);
+  ctx.fillStyle = '#000';
+  ctx.fillRect(x + 2, y + 1, 1, 3);
+}
+
+function drawStatus(ctx: Ctx, w: World, p: Player, x0: number, frame: number) {
   const vulcan = p.weapon === 'vulcan';
   const color = vulcan ? '#f85838' : BLUE;
-  const x0 = Math.round(W / 2 - 40), y = H - 12;
+  const y = H - 12;
   ctx.fillStyle = '#000';
   ctx.fillRect(x0 - 1, y - 1, 81, 10);
   ctx.fillStyle = color;
@@ -825,13 +864,13 @@ function drawStatus(ctx: Ctx, w: World, frame: number) {
 }
 
 const MINI = ['..#..', '..#..', '.###.', '#####', '#.#.#', '..#..'];
-function drawMiniShip(ctx: Ctx, x: number, y: number) {
+function drawMiniShip(ctx: Ctx, x: number, y: number, color = RED) {
   MINI.forEach((row, py) =>
     [...row].forEach((c, px) => {
       if (c !== '#') return;
       ctx.fillStyle = '#000';
       ctx.fillRect(x + px + 1, y + py + 1, 1, 1);
-      ctx.fillStyle = py < 2 ? WHITE : RED;
+      ctx.fillStyle = py < 2 ? WHITE : color;
       ctx.fillRect(x + px, y + py, 1, 1);
     }),
   );
@@ -1044,42 +1083,53 @@ function renderTitle(ctx: Ctx, game: Game, frame: number) {
   drawLogo(ctx, frame, 40);
   drawTextCentered(ctx, 'STRIKE FIGHTER VEKTOR - SCRAMBLE', W / 2, 92, LIGHT);
 
-  drawBox(ctx, 28, 114, 184, 50);
+  drawBox(ctx, 28, 110, 184, 62);
   const s = game.settings;
   const values: Record<(typeof MENU)[number], string> = {
     MODE: game.mode.name,
+    PLAYERS: s.players > 1 ? '2 - CO-OP' : '1',
     MUSIC: MUSIC_NAMES[s.music],
     HELP: 'HOW TO PLAY',
   };
   MENU.forEach((row, i) => {
-    const y = 123 + i * 12;
+    const y = 119 + i * 12;
     const on = i === game.menuRow;
     if (on) drawText(ctx, '>', 38, y, YELLOW);
     drawText(ctx, row, 48, y, on ? YELLOW : WHITE);
     const v = values[row];
-    drawText(ctx, v, 102, y, on ? WHITE : LIGHT);
+    drawText(ctx, v, 110, y, on ? WHITE : LIGHT);
     if (on && row !== 'HELP') {
-      drawText(ctx, '<', 94, y, GREY);
-      drawText(ctx, '>', 104 + textWidth(v), y, GREY);
+      drawText(ctx, '<', 102, y, GREY);
+      drawText(ctx, '>', 112 + textWidth(v), y, GREY);
     }
   });
 
-  drawBox(ctx, 12, 168, 216, 54);
+  drawBox(ctx, 12, 178, 216, 54);
   const best = game.best();
-  drawTextCentered(ctx, best ? `TOP ${pad(best.score, 8)} ${best.name}` : 'NO RECORD YET', W / 2, 178, RED);
-  if ((frame >> 5) % 2 === 0) drawTextCentered(ctx, 'PRESS ENTER OR FIRE', W / 2, 192, YELLOW);
-  drawTextCentered(ctx, 'H SCORES   M MUSIC', W / 2, 206, GREY);
-  drawTextCentered(ctx, 'ARROWS MOVE  SPACE FIRE  X BOMB', W / 2, 300, LIGHT);
+  drawTextCentered(ctx, best ? `TOP ${pad(best.score, 8)} ${best.name}` : 'NO RECORD YET', W / 2, 188, RED);
+  if ((frame >> 5) % 2 === 0) drawTextCentered(ctx, 'PRESS ENTER OR FIRE', W / 2, 202, YELLOW);
+  drawTextCentered(ctx, 'H SCORES   M MUSIC', W / 2, 216, GREY);
+  if (s.players > 1) {
+    // Who flies with what depends on the gamepads plugged in (they show once a button is pressed).
+    const [one, two] =
+      game.pads === 1
+        ? ['1P  KEYBOARD  SPACE FIRE  X BOMB', '2P  GAMEPAD']
+        : game.pads > 1
+          ? ['1P  GAMEPAD 1  (OR W A S D)', '2P  GAMEPAD 2  (OR ARROWS)']
+          : ['1P  W A S D  SPACE FIRE  L-SHIFT BOMB', '2P  ARROWS  . FIRE  - BOMB'];
+    drawTextCentered(ctx, one, W / 2, 290, LIGHT);
+    drawTextCentered(ctx, two, W / 2, 302, LIGHT);
+  } else drawTextCentered(ctx, 'ARROWS MOVE  SPACE FIRE  X BOMB', W / 2, 300, LIGHT);
   if (game.debug) {
-    drawTextCentered(ctx, 'DEBUG - NO HIGH SCORES', W / 2, 232, YELLOW);
-    drawTextCentered(ctx, '1-6 STAGE  N NEXT  B BOSS', W / 2, 252, LIGHT);
-    drawTextCentered(ctx, 'U POWER  I INVINCIBLE  V WEAPON', W / 2, 264, LIGHT);
+    drawTextCentered(ctx, 'DEBUG - NO HIGH SCORES', W / 2, 240, YELLOW);
+    drawTextCentered(ctx, '1-6 STAGE  N NEXT  B BOSS', W / 2, 256, LIGHT);
+    drawTextCentered(ctx, 'U POWER  I INVINCIBLE  V WEAPON', W / 2, 268, LIGHT);
   }
 }
 
 function renderScores(ctx: Ctx, game: Game, frame: number) {
   const entering = game.phase === 'entry';
-  const mode = game.mode;
+  const name = game.tableName;
   backdrop(ctx, game, frame);
 
   drawBox(ctx, 16, 40, 208, 176);
@@ -1087,14 +1137,14 @@ function renderScores(ctx: Ctx, game: Game, frame: number) {
   const world = game.scoresGlobal && !entering && !!game.global;
   const title = entering ? 'NEW RECORD!' : world ? 'WORLD SCORES' : 'LOCAL SCORES';
   drawTextCentered(ctx, title, W / 2, 48, entering ? YELLOW : WHITE);
-  drawTextCentered(ctx, entering ? mode.name : `< ${mode.name} >`, W / 2, 59, entering ? LIGHT : GREY);
+  drawTextCentered(ctx, entering ? name : `< ${name} >`, W / 2, 59, entering ? LIGHT : GREY);
     const cols: [string, number][] = [['NAME', 40], ['SCORE', 88], ['LP', 150], ['MDL', 172]];
   for (const [label, x] of cols) drawText(ctx, label, x, 72, GREY);
   ctx.fillStyle = '#585858';
   ctx.fillRect(26, 81, 188, 1);
 
   const blink = (frame >> 4) % 2 === 0;
-  const list = world ? (game.global?.[mode.id] ?? []) : game.tables[mode.id];
+  const list = world ? (game.global?.[game.table] ?? []) : game.tables[game.table];
   const myRow = world ? game.globalRank : game.entryRank;
   for (let i = 0; i < MAX_SCORES; i++) {
     const y = 86 + i * 12;

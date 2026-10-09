@@ -38,7 +38,7 @@ export interface Bullet {
 
 /** Bullets aren't fired from off screen or point-blank under the player's nose. */
 export function canFire(w: World, x: number, y: number) {
-  return x > 4 && x < W - 4 && y > 4 && y < H - 24 && w.player.alive;
+  return x > 4 && x < W - 4 && y > 4 && y < H - 24 && w.anyAlive;
 }
 
 export function shoot(w: World, x: number, y: number, ang: number, speed: number, big = false) {
@@ -46,9 +46,10 @@ export function shoot(w: World, x: number, y: number, ang: number, speed: number
   w.bullets.push({ x, y, vx: Math.sin(ang) * s, vy: Math.cos(ang) * s, r: big ? 3 : 2, big, t: 0, dead: false });
 }
 
-/** Angle from (x, y) toward the player: 0 is straight down. */
+/** Angle from (x, y) toward the nearest ship: 0 is straight down. */
 export function aimAt(w: World, x: number, y: number) {
-  return Math.atan2(w.player.x - x, w.player.y - y);
+  const p = w.target(x, y);
+  return Math.atan2(p.x - x, p.y - y);
 }
 
 /** n bullets fanned `spread` radians apart, centred on `ang`. */

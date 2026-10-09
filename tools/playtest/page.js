@@ -125,9 +125,13 @@
     return `boss${w.stageIdx + 1}:${i >= 0 ? `pod${i}` : i === -1 ? 'core' : 'body'}`;
   };
 
+  /** The ship the bot is flying this moment (in a 2-player run it takes turns). */
+  let me = null;
+  const ship = (w) => me ?? w.player;
+
   /** What to go for: an item, a boss weak point, an enemy, or the middle of the lower screen. */
   function pickGoal(w, B) {
-    const p = w.player;
+    const p = ship(w);
     let best = null, bd = 1e9;
     for (const it of w.items) {
       if (it.y < 4 || it.y > H - 4) continue;
@@ -159,7 +163,7 @@
   function wrongFace(w, it, B) {
     if (!B.weapon || M.World.weaponFace(it) === B.weapon) return false;
     const toFlip = M.ITEM_CYCLE - (it.t % M.ITEM_CYCLE);
-    return toFlip > Math.hypot(it.x - w.player.x, it.y - w.player.y) / SPEED;
+    return toFlip > Math.hypot(it.x - ship(w).x, it.y - ship(w).y) / SPEED;
   }
 
   /**
@@ -223,7 +227,7 @@
   }
 
   function decide(w, B) {
-    const p = w.player;
+    const p = ship(w);
     const bot = run.bot;
     if (!p.alive || p.timer > 0 || w.state !== 'play') return { dx: 0, dy: 0, bomb: false };
     if (bot.wait > 0 && bot.last) {
@@ -371,8 +375,7 @@
   }
 
   /** What hit the ship, from the bullets and enemies as they stood when it happened. */
-  function culprit(w, bullets, enemies) {
-    const p = w.player;
+  function culprit(w, bullets, enemies, p = w.player) {
     for (const b of bullets) {
       const dx = b.x - p.x, dy = b.y - p.y;
       if (dx * dx + dy * dy < (b.r + 2) ** 2) return { type: 'bullet', kind: bulletKind(b), src: run.src.get(b) ?? 'unknown', age: b.t, seen: b.t >= run.B.delay };
@@ -419,22 +422,23 @@
     game.settings.mode = mode;
     game.startGame();
     const md = M.MODES[mode];
-    const w = (game.world = new M.World(M.makeRng(cfg.seed), md.lives, md.shield));
+    const w = (game.world = new M.World(M.makeRng(cfg.seed), md.lives, md.shield, cfg.players || 1));
+    game.settings.players = cfg.players || 1;
     if (cfg.first > 0) w.goTo(cfg.first);
-    if (cfg.power) Object.assign(w.player, { level: cfg.power.level, missiles: cfg.power.missiles, weapon: cfg.weapon || 'vulcan' });
+    if (cfg.power) for (const q of w.players) Object.assign(q, { level: cfg.power.level, missiles: cfg.power.missiles, weapon: cfg.weapon || 'vulcan' });
     w.god = !!cfg.god;
     // Straight to the boss, like the debug B key.
     if (cfg.bossOnly) w.skipTo(w.stage.length - 20);
     run = {
       cfg, B: { ...botParams(cfg.skill, cfg.bombs), weapon: cfg.weapon || null }, rnd: M.makeRng(cfg.seed ^ 0x5eed),
-      bot: { wait: 0, last: null, calm: 0 }, stages: [], src: new WeakMap(), misjudge: new WeakMap(), seenItems: new WeakSet(),
+      bots: w.players.map(() => ({ wait: 0, last: null, calm: 0 })), stages: [], src: new WeakMap(), misjudge: new WeakMap(), seenItems: new WeakSet(),
       lastBursts: [], frame: 0, done: false, shots: [], godCool: 0,
     };
     newStage(w);
     return true;
   }
 
-  const input = { held: new Set(), pressed: new Set(), typed: [], dragX: 0, dragY: 0, touching: false };
+  const input = { held: new Set(), pressed: new Set(), typed: [], dragX: 0, dragY: 0, touching: false, p2: { held: new Set(), pressed: new Set() } };
 
   function shot(reason, w, bullets) {
     if (!run.cfg.shots) return;
@@ -449,18 +453,34 @@
   }
 
   function stepOnce() {
-    const w = game.world, p = w.player, st = run.st;
-    const act = decide(w, run.B);
+    const w = game.world, st = run.st;
+    const ps = w.players;
+    // Each ship decides for itself; player 2's goes into its own controls.
+    const acts = ps.map((q, i) => {
+      me = q;
+      run.bot = run.bots[i];
+      return decide(w, run.B);
+    });
+    me = null;
+    run.bot = run.bots[0];
     input.held.clear();
     input.pressed.clear();
-    input.held.add('fire');
-    if (act.dx > 0) input.held.add('right');
-    if (act.dx < 0) input.held.add('left');
-    if (act.dy > 0) input.held.add('down');
-    if (act.dy < 0) input.held.add('up');
-    if (act.bomb) input.pressed.add('bomb');
+    input.p2.held.clear();
+    input.p2.pressed.clear();
+    acts.forEach((act, i) => {
+      const held = i ? input.p2.held : input.held, pressed = i ? input.p2.pressed : input.pressed;
+      held.add('fire');
+      if (act.dx > 0) held.add('right');
+      if (act.dx < 0) held.add('left');
+      if (act.dy > 0) held.add('down');
+      if (act.dy < 0) held.add('up');
+      if (act.bomb) pressed.add('bomb');
+    });
+    const act = { bomb: acts.some((a) => a.bomb) };
+    const p = ps[0];
 
-    const before = { alive: p.alive, shield: p.shield, bombs: p.bombs, level: p.level, missiles: p.missiles, stageIdx: w.stageIdx, loop: w.loop, medals: w.medals };
+    const befores = ps.map((q) => ({ alive: q.alive, shield: q.shield, bombs: q.bombs, level: q.level, missiles: q.missiles }));
+    const before = { ...befores[0], stageIdx: w.stageIdx, loop: w.loop, medals: w.medals };
     const bullets = w.bullets, enemies = w.enemies, items = w.items;
     const phase = w.boss ? w.boss.phase : -1, place = where(w, st);
 
@@ -476,11 +496,18 @@
       return;
     }
 
-    if (before.alive && !p.alive) {
-      const c = culprit(w, bullets, enemies);
-      st.deaths.push({ at: place, frame: st.frames, x: Math.round(p.x), y: Math.round(p.y), cause: c, level: before.level, missiles: before.missiles, bombsLeft: before.bombs, bulletsNear: bullets.filter((b) => Math.hypot(b.x - p.x, b.y - p.y) < 60).length, predicted: run.bot.planned?.firstHit ?? 99, danger: Math.round(run.bot.planned?.danger ?? 0), lapse: run.bot.lapse > 0 });
-      shot(`death${st.deaths.length}`, w, bullets.filter((b) => !b.dead || Math.hypot(b.x - p.x, b.y - p.y) < 8));
-    } else if (before.shield && !p.shield && p.alive) st.shieldHits.push({ at: place, frame: st.frames, cause: culprit(w, w.bullets, enemies) });
+    ps.forEach((q, i) => {
+      const bf = befores[i], bot = run.bots[i];
+      if (bf.alive && !q.alive) {
+        const c = culprit(w, bullets, enemies, q);
+        st.deaths.push({ at: place, frame: st.frames, ship: i + 1, x: Math.round(q.x), y: Math.round(q.y), cause: c, level: bf.level, missiles: bf.missiles, bombsLeft: bf.bombs, bulletsNear: bullets.filter((b) => Math.hypot(b.x - q.x, b.y - q.y) < 60).length, predicted: bot.planned?.firstHit ?? 99, danger: Math.round(bot.planned?.danger ?? 0), lapse: bot.lapse > 0 });
+        shot(`death${st.deaths.length}`, w, bullets.filter((b) => !b.dead || Math.hypot(b.x - q.x, b.y - q.y) < 8));
+      } else if (bf.shield && !q.shield && q.alive) st.shieldHits.push({ at: place, frame: st.frames, cause: culprit(w, w.bullets, enemies, q) });
+      if (q.bombs < bf.bombs && q.alive) {
+        st.bombs++;
+        if (acts[i].bomb) st.bombsBot++;
+      }
+    });
 
     // God mode: count the hits that would have been.
     if (w.god && p.alive && p.timer <= 0 && p.invuln <= 0 && w.state === 'play' && run.godCool-- <= 0) {
@@ -489,11 +516,6 @@
         st.godHits.push({ at: where(w, st), frame: st.frames, cause: c });
         run.godCool = 60;
       }
-    }
-
-    if (p.bombs < before.bombs && p.alive) {
-      st.bombs++;
-      if (act.bomb) st.bombsBot++;
     }
 
     // Items: new ones dropped, and which of the old ones went into the ship.

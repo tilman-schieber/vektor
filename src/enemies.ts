@@ -80,7 +80,7 @@ const fighter: EnemyDef = {
     const [path, row] = e.p;
     if (path === 0) {
       if (e.t === 0) e.vy = 2.4;
-      if (e.y > 70 && e.y < 200) e.vx += Math.sign(w.player.x - e.x) * 0.05;
+      if (e.y > 70 && e.y < 200) e.vx += Math.sign(w.target(e.x, e.y).x - e.x) * 0.05;
       e.vx = Math.max(-1.6, Math.min(1.6, e.vx));
     } else if (path === 1) {
       if (e.t === 0) e.vx = e.x < W / 2 ? 2.2 : -2.2;
@@ -205,7 +205,7 @@ const interceptor: EnemyDef = {
     if (e.t === 0) e.vy = -3.6;
     if (e.y < row || e.vy > -3.6) e.vy = Math.min(2.4, e.vy + 0.12);
     // Once turned it leans toward the player.
-    if (e.vy > 0) e.vx += Math.sign(w.player.x - e.x) * 0.03;
+    if (e.vy > 0) e.vx += Math.sign(w.target(e.x, e.y).x - e.x) * 0.03;
     if (e.vy > 0 && !e.p[2]) {
       // It leaves needles behind as it turns: they hang a moment, then dart at you.
       e.p[2] = 1;
@@ -298,9 +298,10 @@ const drone: EnemyDef = {
       e.vx = cx + Math.cos(a) * radius - e.x;
       e.vy = cy + Math.sin(a) * radius - e.y;
     } else if (e.t === leave) {
-      const d = Math.hypot(w.player.x - e.x, w.player.y - e.y) || 1;
-      e.vx = ((w.player.x - e.x) / d) * 3;
-      e.vy = ((w.player.y - e.y) / d) * 3;
+      const p = w.target(e.x, e.y);
+      const d = Math.hypot(p.x - e.x, p.y - e.y) || 1;
+      e.vx = ((p.x - e.x) / d) * 3;
+      e.vy = ((p.y - e.y) / d) * 3;
     }
   },
 };
@@ -460,7 +461,7 @@ const silo: EnemyDef = {
     e.vy = w.scroll;
     e.armored = !siloOpen(e);
     const k = (e.t + (e.p[0] ?? 0)) % SILO_CYCLE;
-    if (k === 150 && e.y > 10 && e.y < 220 && w.player.alive) {
+    if (k === 150 && e.y > 10 && e.y < 220 && w.anyAlive) {
       const r = w.spawn(rocket, e.x, e.y, []);
       r.aim = aimAt(w, e.x, e.y);
       r.seen = true;
@@ -477,7 +478,7 @@ const rocket: EnemyDef = {
   r: 5,
   ground: false,
   update(e, w) {
-    if (e.t < 210 && w.player.alive) turn(e, aimAt(w, e.x, e.y), e.t < 20 ? 0 : 0.028);
+    if (e.t < 210 && w.anyAlive) turn(e, aimAt(w, e.x, e.y), e.t < 20 ? 0 : 0.028);
     const speed = Math.min(1.9, 0.4 + e.t * 0.03) * w.bulletSpeed;
     e.vx = Math.sin(e.aim) * speed;
     e.vy = Math.cos(e.aim) * speed;
@@ -557,13 +558,14 @@ const satellite: EnemyDef = {
     e.vx = cx + Math.cos(a) * radius - e.x;
     e.vy = e.p[1] + Math.sin(a) * radius - e.y;
     if (e.y > 10 && e.t % 150 === 75) aimed(w, e.x, e.y, 1 + loopShots(w), 0.2, 2.0);
-    // The pair's first satellite checks the fence against the ship.
+    // The pair's first satellite checks the fence against the ships.
     const o = e.link;
     if (!o || o.dead || a0 > Math.PI / 2) return;
-    const p = w.player;
     const dx = o.x - e.x, dy = o.y - e.y, len2 = dx * dx + dy * dy || 1;
-    const k = Math.max(0, Math.min(1, ((p.x - e.x) * dx + (p.y - e.y) * dy) / len2));
-    if (Math.hypot(e.x + dx * k - p.x, e.y + dy * k - p.y) < FENCE_R) w.hurt();
+    for (const p of w.players) {
+      const k = Math.max(0, Math.min(1, ((p.x - e.x) * dx + (p.y - e.y) * dy) / len2));
+      if (Math.hypot(e.x + dx * k - p.x, e.y + dy * k - p.y) < FENCE_R) w.hurt(p);
+    }
   },
 };
 
@@ -576,7 +578,7 @@ const mine: EnemyDef = {
   r: 7,
   ground: false,
   update(e, w) {
-    const p = w.player;
+    const p = w.target(e.x, e.y);
     const dx = p.x - e.x, dy = p.y - e.y, d = Math.hypot(dx, dy) || 1;
     if (e.t < 40 || !p.alive) {
       e.vx = 0;
@@ -637,12 +639,13 @@ const gravity: EnemyDef = {
       e.vy = (row - e.y) * 0.04;
       e.vx = Math.sin(e.t / 50) * 0.5;
     } else e.vy = Math.min(1.2, e.vy + 0.02);
-    const p = w.player;
-    const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy) || 1;
-    if (p.alive && d < GRAVITY_R && d > 24 && e.y > 0) {
-      const f = GRAVITY_PULL * (1 - d / GRAVITY_R);
-      p.x += (dx / d) * f;
-      p.y += (dy / d) * f;
+    for (const p of w.players) {
+      const dx = e.x - p.x, dy = e.y - p.y, d = Math.hypot(dx, dy) || 1;
+      if (p.alive && d < GRAVITY_R && d > 24 && e.y > 0) {
+        const f = GRAVITY_PULL * (1 - d / GRAVITY_R);
+        p.x += (dx / d) * f;
+        p.y += (dy / d) * f;
+      }
     }
     if (e.y > 10 && e.t % 140 === 60) ring(w, e.x, e.y, 10 + loopShots(w) * 4, 1.0, e.t / 20);
   },
@@ -672,7 +675,7 @@ const hangar: EnemyDef = {
     e.armored = !hangarOpen(e);
     if (e.y < 10 || e.y > H - 60) return;
     const k = (e.t + (e.p[0] ?? 0)) % HANGAR_CYCLE;
-    if (k === 100 && w.player.alive) {
+    if (k === 100 && w.anyAlive) {
       const r = w.spawn(raider, e.x, e.y, [2, 180 + (w.rng() - 0.5) * 60, 10]);
       r.seen = true;
     }

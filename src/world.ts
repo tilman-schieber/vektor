@@ -1,6 +1,6 @@
 // The simulation: scrolling, the player, shots, enemies, bullets, items, bombs and the boss.
 import { W, H } from './draw';
-import { Enemy, EnemyDef, ItemKind, makeEnemy, gone } from './enemies';
+import { Enemy, EnemyDef, ItemKind, ENEMIES, makeEnemy, gone } from './enemies';
 import { Bullet, ring, stepNeedle, stepFrost, frost } from './bullets';
 import { Boss } from './boss';
 import { Terrain } from './terrain';
@@ -20,10 +20,18 @@ const START_BOMBS = 3;
 export const WARNING_FRAMES = 200;
 /** Frames the caution card shows when a mid-boss comes in. */
 export const MID_CARD = 150;
+/** In a 2-player game, enemies and bosses have this much more health. */
+export const DUO_TOUGHNESS = 1.5;
+/** In a 2-player game, an extra carrier comes this far through each stage. */
+const DUO_ORB_AT = 0.45;
 /** Easy mode: frames until a broken shield comes back. */
 export const SHIELD_REGEN = 20 * 60;
 
 export interface Player {
+  /** 0 for player 1 (red), 1 for player 2 (blue). */
+  id: number;
+  /** Ships left in reserve. */
+  lives: number;
   x: number;
   y: number;
   alive: boolean;
@@ -58,6 +66,8 @@ export interface Shot {
   width?: number;
   /** Weapon level it was fired at, for how it looks. */
   level?: number;
+  /** Which player fired it: a laser bends after its own ship. */
+  owner?: number;
   t: number;
   dead: boolean;
 }
@@ -115,6 +125,9 @@ export interface Controls {
 
 export type WorldState = 'play' | 'clear' | 'over';
 
+/** Hands off the controls. */
+export const NO_CONTROLS: Controls = { dx: 0, dy: 0, dragX: 0, dragY: 0, fire: false, bomb: false };
+
 const PLAYER_SPEED = 2;
 const SCROLL = 0.5;
 /** The weapon item swaps colour this often. */
@@ -137,14 +150,14 @@ export class World {
   frame = 0;
 
   score = 0;
-  lives: number;
   /** Lives lost this stage, for the no-miss bonus. */
   misses = 0;
   medalValue = 500;
   medals = 0;
   private extendsGiven = 0;
 
-  player: Player;
+  /** One ship, or two in a 2-player game. They share the score. */
+  players: Player[];
   shots: Shot[] = [];
   enemies: Enemy[] = [];
   bullets: Bullet[] = [];
@@ -165,6 +178,8 @@ export class World {
   whiteout = 0;
 
   private waveIdx = 0;
+  /** This stage's extra 2-player carrier has come. */
+  private duoOrb = false;
   private later: { at: number; fn: () => void }[] = [];
 
   /** Easy mode: ships carry a shield. */
@@ -175,12 +190,43 @@ export class World {
   mid: Enemy | null = null;
   midCard = 0;
 
-  constructor(rng: Rng, lives: number, shielded = false) {
+  constructor(rng: Rng, lives: number, shielded = false, players = 1) {
     this.rng = rng;
-    this.lives = lives;
     this.shielded = shielded;
     this.terrain = new Terrain(1234, this.stage.ground);
-    this.player = this.freshPlayer();
+    this.players = Array.from({ length: players }, (_, i) => this.freshPlayer(i, lives));
+    for (const p of this.players) p.x = this.homeX(p.id);
+  }
+
+  /** The first ship still flying (or the first ship): for whatever needs just one. */
+  get player(): Player {
+    return this.players.find((p) => p.alive) ?? this.players[0];
+  }
+
+  /** The ship nearest (x, y) that is still flying: what enemies aim at and chase. */
+  target(x: number, y: number): Player {
+    let best = this.player, bd = Infinity;
+    for (const p of this.players) {
+      if (!p.alive) continue;
+      const d = (p.x - x) ** 2 + (p.y - y) ** 2;
+      if (d < bd) (bd = d), (best = p);
+    }
+    return best;
+  }
+
+  /** Some ship is flying. */
+  get anyAlive() {
+    return this.players.some((p) => p.alive);
+  }
+
+  /** Ships left in reserve, all players together. */
+  get lives() {
+    return this.players.reduce((n, p) => n + p.lives, 0);
+  }
+
+  /** Where ship i comes in: the middle, or side by side in a 2-player game. */
+  private homeX(i: number) {
+    return this.players.length > 1 ? W / 2 + (i ? 30 : -30) : W / 2;
   }
 
   get stage(): Stage {
@@ -191,9 +237,9 @@ export class World {
     return this.stage.waves;
   }
 
-  private freshPlayer(): Player {
+  private freshPlayer(id: number, lives: number): Player {
     return {
-      x: W / 2, y: H - 48, alive: true, timer: 0, invuln: 120, weapon: 'vulcan', level: 1, missiles: 0,
+      id, lives, x: W / 2, y: H - 48, alive: true, timer: 0, invuln: 120, weapon: 'vulcan', level: 1, missiles: 0,
       bombs: START_BOMBS, bank: 0, cooldown: 0, missileCooldown: 0, shield: this.shielded, shieldT: 0,
     };
   }
@@ -205,7 +251,12 @@ export class World {
 
   /** How much tougher enemies are on this stage: 12% more health per stage. */
   get toughness() {
-    return 1 + 0.12 * this.stageIdx;
+    return (1 + 0.12 * this.stageIdx) * (this.duo ? DUO_TOUGHNESS : 1);
+  }
+
+  /** A 2-player game: enemies and bosses are tougher, and each stage has an extra orb. */
+  get duo() {
+    return this.players.length > 1;
   }
 
   spawn(def: EnemyDef, x: number, y: number, p: number[] = [], drop?: ItemKind) {
@@ -237,9 +288,10 @@ export class World {
     this.terrain = new Terrain(1234 + this.stageIdx * 77, this.stage.ground);
     this.dist = 0;
     this.warning = 0;
-    // The ship left over the top at stage clear; it flies back in from the bottom.
-    if (this.player.alive) Object.assign(this.player, { x: W / 2, y: H + 24, timer: 50, invuln: Math.max(this.player.invuln, 60), bank: 0 });
+    // The ships left over the top at stage clear; they fly back in from the bottom.
+    for (const p of this.players) if (p.alive) Object.assign(p, { x: this.homeX(p.id), y: H + 24, timer: 50, invuln: Math.max(p.invuln, 60), bank: 0 });
     this.waveIdx = 0;
+    this.duoOrb = false;
     this.enemies = [];
     this.bullets = [];
     this.items = [];
@@ -266,12 +318,13 @@ export class World {
     this.score += n;
     if (this.extendsGiven < EXTENDS.length && this.score >= EXTENDS[this.extendsGiven]) {
       this.extendsGiven++;
-      this.lives++;
+      for (const p of this.players) p.lives++;
       sfx.oneUp();
     }
   }
 
-  update(c: Controls) {
+  /** One frame; controls per player (a missing one is hands off). */
+  update(cs: Controls[]) {
     this.frame++;
     this.stateTimer++;
     if (this.state === 'over') return;
@@ -287,7 +340,7 @@ export class World {
       this.later.splice(i--, 1);
     }
 
-    this.updatePlayer(c);
+    this.players.forEach((p, i) => this.updatePlayer(p, cs[i] ?? NO_CONTROLS));
     this.updateShots();
     if (this.boss) this.boss.update(this);
     this.updateEnemies();
@@ -304,6 +357,11 @@ export class World {
 
   private runTimeline() {
     while (this.waveIdx < this.waves.length && this.dist >= this.waves[this.waveIdx].at) this.waves[this.waveIdx++].run(this);
+    // Two ships share the orbs, so a 2-player game gets one more per stage: weapon and missiles in turn.
+    if (this.duo && !this.duoOrb && this.dist >= this.stage.length * DUO_ORB_AT) {
+      this.duoOrb = true;
+      this.spawn(ENEMIES.carrier, W / 2, -20, [], this.stageIdx % 2 ? 'missile' : 'weapon');
+    }
     if (!this.boss && this.warning === 0 && this.dist >= this.stage.length) {
       this.warning = WARNING_FRAMES;
       sfx.warning();
@@ -322,23 +380,24 @@ export class World {
 
   // ---------- player ----------
 
-  private updatePlayer(c: Controls) {
-    const p = this.player;
+  private updatePlayer(p: Player, c: Controls) {
     if (p.invuln > 0) p.invuln--;
     if (p.shieldT > 0 && --p.shieldT === 0) {
       p.shield = true;
       sfx.shieldUp();
     }
     if (!p.alive) {
-      if (--p.timer > 0 || this.lives <= 0) {
-        if (this.lives <= 0 && p.timer < -90 && this.state !== 'over') {
+      if (--p.timer > 0 || p.lives <= 0) {
+        // Game over once every ship is gone.
+        const out = this.players.every((q) => !q.alive && q.lives <= 0 && q.timer < -90);
+        if (out && this.state !== 'over') {
           this.state = 'over';
           this.stateTimer = 0;
         }
         return;
       }
       // Back in from the bottom edge.
-      Object.assign(p, { alive: true, x: W / 2, y: H + 24, timer: 50, invuln: 180, bank: 0, shield: this.shielded, shieldT: 0 });
+      Object.assign(p, { alive: true, x: this.homeX(p.id), y: H + 24, timer: 50, invuln: 180, bank: 0, shield: this.shielded, shieldT: 0 });
       return;
     }
     if (p.timer > 0) {
@@ -366,14 +425,13 @@ export class World {
     const bankTo = Math.max(-1, Math.min(1, dx + c.dragX * 0.5));
     p.bank += (bankTo - p.bank) * 0.2;
 
-    if (c.bomb && p.bombs > 0 && this.bombT < 0) this.dropBomb();
-    if (c.fire) this.fire();
+    if (c.bomb && p.bombs > 0 && this.bombT < 0) this.dropBomb(p);
+    if (c.fire) this.fire(p);
     if (p.cooldown > 0) p.cooldown--;
     if (p.missileCooldown > 0) p.missileCooldown--;
   }
 
-  private fire() {
-    const p = this.player;
+  private fire(p: Player) {
     if (p.missiles > 0 && p.missileCooldown <= 0) {
       // A full rack of five also reloads faster.
       p.missileCooldown = p.missiles >= MAX_MISSILES ? 28 : 36;
@@ -400,13 +458,12 @@ export class World {
     } else {
       p.cooldown = 2;
       const width = 3 + p.level * 2;
-      this.shots.push({ kind: 'laser', x: p.x, y: p.y - 14, vx: 0, vy: -10, dmg: 0.6 + p.level * 0.3, hit: new Set(), width, level: p.level, t: 0, dead: false });
+      this.shots.push({ kind: 'laser', x: p.x, y: p.y - 14, vx: 0, vy: -10, dmg: 0.6 + p.level * 0.3, hit: new Set(), width, level: p.level, owner: p.id, t: 0, dead: false });
       sfx.laser();
     }
   }
 
-  private dropBomb() {
-    const p = this.player;
+  private dropBomb(p: Player) {
     p.bombs--;
     this.bombT = 0;
     this.bombX = p.x;
@@ -417,17 +474,15 @@ export class World {
     sfx.bomb();
   }
 
-  /** Hurts the ship as a bullet would: for bosses' beams and blasts. */
-  hurt() {
-    const p = this.player;
+  /** Hurts ship p as a bullet would: for bosses' beams and blasts. */
+  hurt(p: Player) {
     if (!p.alive || p.invuln > 0 || p.timer > 0 || this.state !== 'play' || this.god) return;
-    this.hitPlayer();
+    this.hitPlayer(p);
   }
 
   /** A hit: the shield takes it if it's up, otherwise the ship is lost. */
-  private hitPlayer() {
-    const p = this.player;
-    if (!p.shield) return this.killPlayer();
+  private hitPlayer(p: Player) {
+    if (!p.shield) return this.killPlayer(p);
     p.shield = false;
     p.shieldT = SHIELD_REGEN;
     p.invuln = 90;
@@ -436,11 +491,10 @@ export class World {
     sfx.shieldDown();
   }
 
-  private killPlayer() {
-    const p = this.player;
+  private killPlayer(p: Player) {
     p.alive = false;
     p.timer = 120;
-    this.lives--;
+    p.lives--;
     this.misses++;
     this.blast(p.x, p.y, true, false);
     this.debris(p.x, p.y, 24, '#f8d838');
@@ -457,10 +511,10 @@ export class World {
   // ---------- shots ----------
 
   private updateShots() {
-    const p = this.player;
     for (const s of this.shots) {
       s.t++;
       if (s.kind === 'missile') this.steer(s);
+      const p = this.players[s.owner ?? 0];
       if (s.kind === 'laser' && p.alive) {
         // The beam bends after the ship.
         s.x += (p.x - s.x) * 0.25;
@@ -574,7 +628,6 @@ export class World {
   // ---------- items ----------
 
   private updateItems() {
-    const p = this.player;
     for (const it of this.items) {
       it.t++;
       if (it.kind === 'medal') {
@@ -592,9 +645,11 @@ export class World {
         it.dead = true;
         if (it.kind === 'medal') this.medalValue = 500;
       }
-      if (p.alive && Math.abs(it.x - p.x) < 12 && Math.abs(it.y - p.y) < 12) {
+      // Whoever touches it first gets it.
+      const p = this.players.find((q) => q.alive && Math.abs(it.x - q.x) < 12 && Math.abs(it.y - q.y) < 12);
+      if (p && !it.dead) {
         it.dead = true;
-        this.collect(it);
+        this.collect(it, p);
       }
     }
     this.items = this.items.filter((it) => !it.dead);
@@ -605,8 +660,7 @@ export class World {
     return Math.floor(it.t / ITEM_CYCLE) % 2 ? 'laser' : 'vulcan';
   }
 
-  private collect(it: Item) {
-    const p = this.player;
+  private collect(it: Item, p: Player) {
     const bonus = (label: string) => {
       this.addScore(5000);
       this.popup(it.x, it.y, label);
@@ -728,17 +782,20 @@ export class World {
       }
     }
 
-    const p = this.player;
+    for (const p of this.players) this.collidePlayer(p);
+  }
+
+  private collidePlayer(p: Player) {
     if (!p.alive || p.invuln > 0 || p.timer > 0 || this.state !== 'play' || this.god) return;
     for (const b of this.bullets) {
       const dx = b.x - p.x, dy = b.y - p.y;
-      if (dx * dx + dy * dy < (b.r + 2) ** 2) return this.hitPlayer();
+      if (dx * dx + dy * dy < (b.r + 2) ** 2) return this.hitPlayer(p);
     }
     for (const e of this.enemies) {
       // Cloaked ships pass through you; they only show when they fire.
       if (e.def.ground || e.dead || e.hidden) continue;
       const r = (e.r ?? e.def.r) * 0.6 + 2;
-      if (Math.abs(e.x - p.x) < r && Math.abs(e.y - p.y) < r) return this.hitPlayer();
+      if (Math.abs(e.x - p.x) < r && Math.abs(e.y - p.y) < r) return this.hitPlayer(p);
     }
   }
 

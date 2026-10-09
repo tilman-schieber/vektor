@@ -22,7 +22,7 @@ function moveTo(e: Enemy, x: number, y: number) {
 
 /** Spawns a homing rocket at (x, y), as the volcano's silos do. */
 function rocket(w: World, x: number, y: number) {
-  if (!w.player.alive) return;
+  if (!w.anyAlive) return;
   const r = w.spawn(ENEMIES.rocket, x, y, []);
   r.aim = aimAt(w, x, y);
   r.seen = true;
@@ -173,7 +173,7 @@ const wormHead: EnemyDef = {
     if (under) {
       if (k === 0 && e.t >= MID_TIME) return escape(e, w);
       // Burrowing: a mound of sand creeps after you, low on the screen, then it bursts out.
-      const tx = Math.max(34, Math.min(W - 34, w.player.x));
+      const tx = Math.max(34, Math.min(W - 34, w.target(e.x, e.y).x));
       moveTo(e, e.x + Math.max(-1.6, Math.min(1.6, tx - e.x)), e.y + Math.max(-2, Math.min(2, WORM_Y - e.y)));
       if (k === WORM_UNDER - 1) {
         // Out it comes, arcing over toward the far side.
@@ -287,7 +287,7 @@ const attackChopper: EnemyDef = {
     }
     // It lines up with you, slowly.
     e.vy = (64 - e.y) * 0.04;
-    e.vx = Math.max(-0.7, Math.min(0.7, (w.player.x - e.x) * 0.02));
+    e.vx = Math.max(-0.7, Math.min(0.7, (w.target(e.x, e.y).x - e.x) * 0.02));
     const k = e.t % CHOPPER_CYCLE;
     // The chin gun sweeps across the screen in short bursts, the other way each time: slip
     // through between the bursts.
