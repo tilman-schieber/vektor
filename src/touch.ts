@@ -11,6 +11,7 @@ export interface TouchButton {
 const ROWS: TouchButton[][] = [
   [
     { id: 'music', label: '♪', a: 'mute' },
+    { id: 'swap', label: 'SWAP', a: 'swap' },
     { id: 'bomb', label: 'BOMB', a: 'bomb' },
     { id: 'start', label: 'START', a: 'start', typed: 'Enter' },
   ],

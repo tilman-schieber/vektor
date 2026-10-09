@@ -135,7 +135,6 @@
     let best = null, bd = 1e9;
     for (const it of w.items) {
       if (it.y < 4 || it.y > H - 4) continue;
-      if (it.kind === 'weapon' && wrongFace(w, it, B)) continue;
       const d = Math.hypot(it.x - p.x, it.y - p.y) * (it.kind === 'medal' ? 1.3 : 1);
       if (d < bd) (bd = d), (best = it);
     }
@@ -159,11 +158,17 @@
     return { x: W / 2, y: PREF_Y };
   }
 
-  /** A weapon orb showing the other weapon, that won't turn before we could get there. */
-  function wrongFace(w, it, B) {
-    if (!B.weapon || M.World.weaponFace(it) === B.weapon) return false;
-    const toFlip = M.ITEM_CYCLE - (it.t % M.ITEM_CYCLE);
-    return toFlip > Math.hypot(it.x - ship(w).x, it.y - ship(w).y) / SPEED;
+  /**
+   * The weapon to fly with: --weapon if given and owned; else the laser on a boss, the plasma when
+   * air enemies crowd in, the vulcan otherwise.
+   */
+  function wantWeapon(w, p, B) {
+    const has = (k) => p.owned.includes(k);
+    if (B.weapon) return has(B.weapon) ? B.weapon : p.weapon;
+    if (w.boss && w.boss.dying < 0 && has('laser')) return 'laser';
+    const crowd = w.enemies.filter((e) => isAir(e) && !e.hidden && e.y > 0 && e.y < H && Math.hypot(e.x - p.x, e.y - p.y) < 160).length;
+    if (crowd >= 4 && has('plasma')) return 'plasma';
+    return has('vulcan') ? 'vulcan' : p.weapon;
   }
 
   /**
@@ -256,7 +261,6 @@
     }
     const foes = w.enemies.filter((e) => isAir(e) && Math.abs(e.x - p.x) < reach + 30 && Math.abs(e.y - p.y) < reach + 30);
     const shooters = w.enemies.filter((e) => !e.dead && !e.hidden && e.y > -10 && e.y < H && e.def.name !== 'part' && e.def.name !== 'groundPart');
-    const avoid = w.items.filter((it) => it.kind === 'weapon' && wrongFace(w, it, B));
     // Beams, markers and fences are big and bright: even a lapsing player sees them.
     const hz = hazards(w);
     const goal = pickGoal(w, B);
@@ -296,7 +300,6 @@
             if (t < firstHit) firstHit = t;
           } else if (ex < r + 10 && ey < r + 10) danger += 6 * wt;
         }
-        for (const it of avoid) if (Math.abs(it.x + it.vx * t - x) < 14 && Math.abs(it.y + it.vy * t - y) < 14) danger += 40;
         for (const h of hz) {
           const d = h(x, y, t) * wt;
           danger += d;
@@ -337,7 +340,13 @@
     // The mothership's charge: a player who can't break it bombs just before it fires.
     const ch = w.boss?.charge;
     if (ch && ch.t >= M.boss.CHARGE_FRAMES - 6 && B.bombs && p.bombs > 0 && w.bombT < 0 && p.invuln <= 0) act.bomb = true;
-    bot.last = act;
+    // Switch to the weapon that suits, one press at a time.
+    if (bot.swapWait > 0) bot.swapWait -= B.think;
+    else if (p.weapon !== wantWeapon(w, p, B)) {
+      act.swap = true;
+      bot.swapWait = 12;
+    }
+    bot.last = { ...act, swap: false };
     bot.planned = best;
     return act;
   }
@@ -425,7 +434,9 @@
     const w = (game.world = new M.World(M.makeRng(cfg.seed), md.lives, md.shield, cfg.players || 1));
     game.settings.players = cfg.players || 1;
     if (cfg.first > 0) w.goTo(cfg.first);
-    if (cfg.power) for (const q of w.players) Object.assign(q, { level: cfg.power.level, missiles: cfg.power.missiles, weapon: cfg.weapon || 'vulcan' });
+    if (cfg.power) for (const q of w.players) Object.assign(q, { level: cfg.power.level, missiles: cfg.power.missiles });
+    // A weapon to test: in hand from the start.
+    if (cfg.weapon) for (const q of w.players) (w.arm(q, cfg.weapon), (q.weapon = cfg.weapon));
     w.god = !!cfg.god;
     // Straight to the boss, like the debug B key.
     if (cfg.bossOnly) w.skipTo(w.stage.length - 20);
@@ -475,6 +486,7 @@
       if (act.dy > 0) held.add('down');
       if (act.dy < 0) held.add('up');
       if (act.bomb) pressed.add('bomb');
+      if (act.swap) pressed.add('swap');
     });
     const act = { bomb: acts.some((a) => a.bomb) };
     const p = ps[0];

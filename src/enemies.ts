@@ -3,7 +3,9 @@ import type { World } from './world';
 import { aimed, aimAt, fan, ring, needles } from './bullets';
 import { W, H } from './draw';
 
-export type ItemKind = 'weapon' | 'missile' | 'bomb' | 'medal';
+export type WeaponKind = 'vulcan' | 'laser' | 'plasma';
+export type ItemKind = WeaponKind | 'missile' | 'bomb' | 'medal';
+export const WEAPONS: WeaponKind[] = ['vulcan', 'laser', 'plasma'];
 
 export interface Enemy {
   def: EnemyDef;

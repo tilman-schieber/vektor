@@ -102,7 +102,7 @@ const WAVES: Wave[] = [
   // The outskirts.
   { at: 60, run: chopper(170, 70) },
   { at: 160, run: dive(60, 5) },
-  { at: 260, run: both(cargo(160), chopper(50, 100)) },
+  { at: 260, run: both(cargo(160, 'laser'), chopper(50, 100)) },
   { at: 380, run: hatches(150, 200) },
   { at: 460, run: train(3) },
   { at: 600, run: swoop(160, 150) },
@@ -120,7 +120,7 @@ const WAVES: Wave[] = [
   { at: 1780, run: both(hatches(40, 200), chopper(120, 60)) },
   { at: 1900, run: train(5, 0.55) },
   // The river.
-  { at: 2300, run: cargo(150) },
+  { at: 2300, run: cargo(150, 'plasma') },
   // The power plant.
   { at: 2560, run: both(tanks(160, 3), tanks(220, 3)) },
   { at: 2660, run: train(4) },

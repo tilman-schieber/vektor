@@ -389,7 +389,7 @@ export const MIDS = { submarine, wormHead, wormBody, icebreaker, attackChopper, 
 
 type Run = (w: World) => void;
 
-export const sub = (drop: ItemKind = 'weapon'): Run => (w) => {
+export const sub = (drop: ItemKind = 'vulcan'): Run => (w) => {
   const e = w.spawn(submarine, W / 2, 90, [], drop);
   e.seen = true;
 };
@@ -399,11 +399,11 @@ export const worm = (drop: ItemKind = 'bomb'): Run => (w) => {
   h.seen = true;
 };
 
-export const breaker = (drop: ItemKind = 'weapon'): Run => (w) => void w.spawn(icebreaker, W / 2, -60, [], drop);
+export const breaker = (drop: ItemKind = 'vulcan'): Run => (w) => void w.spawn(icebreaker, W / 2, -60, [], drop);
 
 export const gunChopper = (drop: ItemKind = 'missile'): Run => (w) => void w.spawn(attackChopper, W / 2, -40, [], drop);
 
-export const serpent = (drop: ItemKind = 'weapon'): Run => (w) => {
+export const serpent = (drop: ItemKind = 'vulcan'): Run => (w) => {
   chain(w, serpentHead, serpentBody, SERPENT_SEGS, W / 2, -30, [], drop).seen = true;
 };
 

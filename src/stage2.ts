@@ -50,7 +50,7 @@ const WAVES: Wave[] = [
   // The dunes.
   { at: 60, run: dive(120, 5) },
   { at: 180, run: scramble(3) },
-  { at: 300, run: both(sweep(true, 70), cargo(180)) },
+  { at: 300, run: both(sweep(true, 70), cargo(180, 'plasma')) },
   { at: 420, run: tanks(-12, 4, 0.6, 0, 110) },
   { at: 520, run: scramble(4, 60) },
   { at: 640, run: both(swoop(70, 150), swoop(170, 150)) },
@@ -66,7 +66,7 @@ const WAVES: Wave[] = [
   { at: 1700, run: canyonTanks(5) },
   { at: 1780, run: both(battery(40), pillbox(200)) },
   { at: 1880, run: scramble(5, 50) },
-  { at: 2420, run: cargo(60) },
+  { at: 2420, run: cargo(60, 'laser') },
   { at: 2520, run: both(swoop(120, 170), scramble(3)) },
   { at: 2660, run: both(gun(60, 60), gun(180, 90)) },
   { at: 2860, run: canyonTanks(6) },

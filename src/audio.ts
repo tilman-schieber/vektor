@@ -108,6 +108,8 @@ export const sfx = {
       tone(440, 0.2, 'square', 0.1, ctx.currentTime + k * 0.5 + 0.25, 660);
     }
   },
+  plasma: () => every('plasma', 0.07) && noise(0.06, 0.1, 5200, 0, 'bandpass', 2600),
+  swap: () => arp([76, 83], 0.035, 0.14),
   needle: () => every('needle', 0.08) && tone(2400, 0.06, 'triangle', 0.07, 0, 3600),
   spotted: () => arp([88, 0, 88], 0.05, 0.14),
   beam: () => {

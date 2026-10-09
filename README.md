@@ -6,23 +6,24 @@ A vertical-scrolling shooter in the style of the early nineties arcade, built in
 
 Fly north. Stage 1 crosses the open sea, the beach, a jungle river and an enemy base, where a flying fortress waits. Stage 2 crosses the desert: dunes, the canyons of the mesas and a refinery, guarded by a crawler on tracks. Stage 3 goes north: the polar sea, the pack ice, a snowfield and a naval base, out to the anchorage where a battleship lies. Stage 4 is a ruined city at night: the outskirts, downtown, a river, a power plant and the boulevard, where a walking mech comes stomping. Stage 5 is the volcano: basalt fields round a lava lake, lava rivers, the ash plains and a fortress in the crater. Stage 6 climbs into orbit: open space and nebulae, a field of drifting asteroids, the defence ring with its laser fences, and a station built into an asteroid, where the mothership waits. Beat all six and the ending rolls; then it all starts again, faster. You have 3 ships, and one more at 200000 and at 500000 points.
 
-Two can play at once (PLAYERS on the title screen): red and blue fly together and share the score, each with their own ships, weapons, missiles and bombs, and it is over when both are out. Player 1 flies with W A S D, fires with Space and bombs with the left Shift; player 2 uses the arrows, `.` to fire and the key right of it (`-` on a German keyboard, `/` on a US one) or the right Shift to bomb. With one gamepad, the gamepad is player 2 and the whole keyboard player 1's (W A S D or the arrows); with two, one each. Start on any gamepad pauses. The title screen shows who flies with what (browsers only report a gamepad once a button on it has been pressed). Enemies go for whichever ship is nearer, and an item goes to whoever catches it. To keep it a fight, enemies and bosses take half as much again to shoot down, and every stage has one more carrier, as two ships share the orbs. 2-player games have their own high score tables.
+Two can play at once (PLAYERS on the title screen): red and blue fly together and share the score, each with their own ships, weapons, missiles and bombs, and it is over when both are out. Player 1 flies with W A S D, fires with Space, bombs with the left Shift and switches weapon with E; player 2 uses the arrows, `.` to fire, the key right of it (`-` on a German keyboard, `/` on a US one) or the right Shift to bomb, and `,` to switch. With one gamepad, the gamepad is player 2 and the whole keyboard player 1's (W A S D or the arrows); with two, one each. Start on any gamepad pauses. The title screen shows who flies with what (browsers only report a gamepad once a button on it has been pressed). Enemies go for whichever ship is nearer, and an item goes to whoever catches it. To keep it a fight, enemies and bosses take half as much again to shoot down, and every stage has one more carrier, as two ships share the orbs. 2-player games have their own high score tables.
 
 Easy mode (MODE on the title screen) gives the ship a shield that takes the first hit and comes back 20 seconds later; every new ship starts with it up. Easy has its own high score tables (Left/Right on the score screen switches modes).
 
 ## Weapons and items
 
-Carriers drop items when shot down. The weapon orb changes colour while it floats around: every orb powers up, and catching the other colour also switches weapon, keeping your level.
+Carriers drop items when shot down, each a little weapon of its own. There are three main weapons and one power level, up to 5, for whichever you fly. You start with the vulcan; picking up a weapon you haven't got adds it to your arsenal and puts it in your hands, and every weapon pickup raises the level. Switch between the ones you have with C (a shoulder button on a gamepad, SWAP on a phone).
 
 | Item | What it does |
 | --- | --- |
-| V (red) | Vulcan: a spread that widens with every level, up to 5 |
-| L (blue) | Laser: a narrow beam that bends after the ship and goes through what it hits |
-| M (green) | Homing missiles, on top of either weapon, up to 5; a full rack of five reloads faster |
-| B (yellow) | One more bomb, up to 7 |
+| Gatling (red) | Vulcan: a spread that widens with every level |
+| Emitter (blue) | Laser: a narrow beam that bends after the ship and goes through what it hits. The strongest against bosses, though their armour takes some of its edge off |
+| Tesla coil (violet) | Plasma: lightning that finds the nearest enemy by itself and jumps on to the next, one more each level. Made for swarms, weak against bosses |
+| Missile pod (green) | Homing missiles, on top of any weapon, up to 5; a full rack of five reloads faster |
+| Bomb (yellow) | One more bomb, up to 7 |
 | Medal | Hidden in bunkers. Each is worth 500 more than the last, up to 10000; miss one and it is back to 500 |
 
-A bomb clears every bullet on screen, hurts everything in sight and keeps you safe while it burns. Losing a ship costs half your weapon levels and half your missiles, rounded down but at least one each (so level 5 drops to 3, level 2 to 1), and you start the next ship with at least 3 bombs.
+A bomb clears every bullet on screen, hurts everything in sight and keeps you safe while it burns. Losing a ship costs half your weapon level and half your missiles (you keep your weapons), rounded down but at least one each (so level 5 drops to 3, level 2 to 1), and you start the next ship with at least 3 bombs.
 
 ## The stages
 
@@ -41,14 +42,15 @@ Stage clear pays a no-miss bonus and 3000 for every bomb you didn't use.
 | Arrows / W A S D | Fly |
 | Space / Z / J | Fire (hold) |
 | X / Shift / K | Bomb |
+| C | Switch weapon |
 | Enter / Esc | Start / pause |
 | Backspace | Quit to menu (while paused) |
 | M | Music on/off |
 | H | High scores (title screen) |
 
-A gamepad works too: stick or d-pad to fly, A (or X) to fire, B (or Y) to bomb, Start to pause and Select to quit from the pause screen. On the title screen Y shows the high scores; when typing a name, Up/Down pick a letter, A enters it and B rubs one out.
+A gamepad works too: stick or d-pad to fly, A (or X) to fire, B (or Y) to bomb, LB or RB to switch weapon, Start to pause and Select to quit from the pause screen. On the title screen Y shows the high scores; when typing a name, Up/Down pick a letter, A enters it and B rubs one out.
 
-On phones, drag anywhere on the screen to fly: the ship moves with your finger and fires while it is down. BOMB is below the screen.
+On phones, drag anywhere on the screen to fly: the ship moves with your finger and fires while it is down. SWAP and BOMB are below the screen.
 
 ## Art
 

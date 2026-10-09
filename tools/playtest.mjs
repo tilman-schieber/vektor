@@ -13,8 +13,8 @@
 //   --boss-only            with L,M: skip each stage straight to its boss, so the fight is at that power
 //   --mode normal|easy     game mode (default normal)
 //   --god                  invincible: measures boss times; counts the hits that would have landed
-//   --weapon vulcan|laser  weapon the bot prefers (it leaves orbs of the other colour); with L,M also the
-//                          starting weapon. Default: no preference, takes every orb
+//   --weapon vulcan|laser|plasma  the one weapon the bot flies, in hand from the start. Default: it
+//                          switches by itself: laser on bosses, plasma on crowds, vulcan otherwise
 //   --skill 0..1           0 sluggish and sloppy, 1 sharp (default 0.7)
 //   --players 1|2          one ship, or two flown by two bots in a 2-player game (default 1)
 //   --bombs on|off         whether the bot bombs its way out when cornered (default on, off with --god)
@@ -78,7 +78,7 @@ function parseArgs(argv) {
     o.power = { level, missiles };
   }
   if (o.bossOnly && !o.power) throw new Error('--boss-only needs --start-power L,M');
-  if (o.weapon && !['vulcan', 'laser'].includes(o.weapon)) throw new Error(`bad --weapon ${o.weapon}`);
+  if (o.weapon && !['vulcan', 'laser', 'plasma'].includes(o.weapon)) throw new Error(`bad --weapon ${o.weapon}`);
   if (!(o.skill >= 0 && o.skill <= 1)) throw new Error(`bad --skill ${o.skill}`);
   if (o.players !== 1 && o.players !== 2) throw new Error(`bad --players ${o.players}`);
   return o;

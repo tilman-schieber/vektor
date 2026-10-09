@@ -5,8 +5,9 @@ import { makeRng, randomSeed } from './rng';
 import { World, Controls, MAX_LEVEL, MAX_MISSILES, MAX_BOMBS } from './world';
 import { HELP_PAGES } from './help';
 import { STAGES } from './stages';
+import { WEAPONS } from './enemies';
 
-export type Action = 'up' | 'down' | 'left' | 'right' | 'fire' | 'bomb' | 'start' | 'back' | 'quit' | 'mute' | 'scores';
+export type Action = 'up' | 'down' | 'left' | 'right' | 'fire' | 'bomb' | 'swap' | 'start' | 'back' | 'quit' | 'mute' | 'scores';
 
 export interface Input {
   held: Set<Action>;
@@ -254,6 +255,7 @@ export class Game {
         dragY: live && touch ? input.dragY : 0,
         fire: live && (h.has('fire') || (touch && input.touching)),
         bomb: live && pressed.has('bomb'),
+        swap: live && pressed.has('swap'),
       };
     };
     return [ship(input.held, input.pressed, true), ship(input.p2.held, input.p2.pressed, false)];
@@ -454,16 +456,22 @@ export class Game {
 
   // ---------- debug mode ----------
 
-  /** 1-6 stage, N next stage, B boss, U full power, I invincible, V switch weapon. */
+  /** 1-6 stage, N next stage, B boss, U full power and all weapons, I invincible, V next weapon. */
   private debugKeys(typed: string[]) {
     const w = this.world!;
     for (const k of typed) {
       if (k >= '1' && k <= String(STAGES.length)) this.gotoStage(Number(k));
       else if (k === 'N') this.gotoStage(w.stageIdx + 2);
       else if (k === 'B') this.bossNow();
-      else if (k === 'U') for (const p of w.players) Object.assign(p, { level: MAX_LEVEL, missiles: MAX_MISSILES, bombs: MAX_BOMBS });
+      else if (k === 'U') for (const p of w.players) Object.assign(p, { level: MAX_LEVEL, missiles: MAX_MISSILES, bombs: MAX_BOMBS, owned: [...WEAPONS] });
       else if (k === 'I') w.god = !w.god;
-      else if (k === 'V') for (const p of w.players) p.weapon = p.weapon === 'vulcan' ? 'laser' : 'vulcan';
+      else if (k === 'V')
+        for (const p of w.players) {
+          // The next weapon, unlocked if need be.
+          const next = WEAPONS[(WEAPONS.indexOf(p.weapon) + 1) % WEAPONS.length];
+          w.arm(p, next);
+          p.weapon = next;
+        }
       else continue;
       sfx.select();
     }

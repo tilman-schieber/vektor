@@ -32,7 +32,9 @@ export function summarize(runs) {
   for (const [stage, sts] of [...byStage].sort((a, b) => a[0] - b[0])) {
     const deaths = sts.flatMap((s) => s.deaths);
     const hits = sts.flatMap((s) => [...s.deaths, ...s.shieldHits, ...s.godHits]);
-    const it = (k, f) => sts.map((s) => s.items[k]?.[f] ?? 0);
+    // Weapon pickups count together, whichever weapon.
+    const kinds = (k) => (k === 'weapon' ? ['vulcan', 'laser', 'plasma'] : [k]);
+    const it = (k, f) => sts.map((s) => kinds(k).reduce((n, x) => n + (s.items[x]?.[f] ?? 0), 0));
     const got = (k) => `${fmt(mean(it(k, 'got')))}/${fmt(mean(it(k, 'dropped')))}`;
     const killed = sts.filter((s) => s.boss?.killed);
     rows.push({

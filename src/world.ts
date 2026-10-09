@@ -1,6 +1,6 @@
 // The simulation: scrolling, the player, shots, enemies, bullets, items, bombs and the boss.
 import { W, H } from './draw';
-import { Enemy, EnemyDef, ItemKind, ENEMIES, makeEnemy, gone } from './enemies';
+import { Enemy, EnemyDef, ItemKind, WeaponKind, WEAPONS, ENEMIES, makeEnemy, gone } from './enemies';
 import { Bullet, ring, stepNeedle, stepFrost, frost } from './bullets';
 import { Boss } from './boss';
 import { Terrain } from './terrain';
@@ -9,7 +9,7 @@ import type { Stage } from './stage';
 import { sfx } from './audio';
 import { Rng } from './rng';
 
-export type Weapon = 'vulcan' | 'laser';
+export type Weapon = WeaponKind;
 export const MAX_LEVEL = 5;
 export const MAX_MISSILES = 5;
 export const MAX_BOMBS = 7;
@@ -39,7 +39,10 @@ export interface Player {
   timer: number;
   /** Frames of blinking invulnerability. */
   invuln: number;
+  /** The weapon in use, and the ones in the arsenal (in WEAPONS order). */
   weapon: Weapon;
+  owned: Weapon[];
+  /** Power level, shared by every weapon. */
   level: number;
   missiles: number;
   bombs: number;
@@ -121,17 +124,30 @@ export interface Controls {
   dragY: number;
   fire: boolean;
   bomb: boolean;
+  /** Step to the next weapon in the arsenal. */
+  swap: boolean;
 }
 
 export type WorldState = 'play' | 'clear' | 'over';
 
 /** Hands off the controls. */
-export const NO_CONTROLS: Controls = { dx: 0, dy: 0, dragX: 0, dragY: 0, fire: false, bomb: false };
+export const NO_CONTROLS: Controls = { dx: 0, dy: 0, dragX: 0, dragY: 0, fire: false, bomb: false, swap: false };
 
 const PLAYER_SPEED = 2;
 const SCROLL = 0.5;
 /** The weapon item swaps colour this often. */
-export const ITEM_CYCLE = 150;
+/** Plasma: frames between zaps, how far the first bolt reaches (plus per level), and how far it jumps on. */
+const PLASMA_RATE = 6;
+/** How much of a laser's damage gets through a boss's armour. */
+const LASER_VS_BOSS = 0.65;
+const PLASMA_REACH = 140;
+const PLASMA_JUMP = 70;
+
+/** A plasma bolt for the screen: the points it runs through, and frames it has shown. */
+export interface Bolt {
+  pts: number[];
+  t: number;
+}
 
 export class World {
   rng: Rng;
@@ -164,6 +180,7 @@ export class World {
   items: Item[] = [];
   blasts: Blast[] = [];
   particles: Particle[] = [];
+  bolts: Bolt[] = [];
   wrecks: Wreck[] = [];
   popups: Popup[] = [];
   boss: Boss | null = null;
@@ -239,7 +256,7 @@ export class World {
 
   private freshPlayer(id: number, lives: number): Player {
     return {
-      id, lives, x: W / 2, y: H - 48, alive: true, timer: 0, invuln: 120, weapon: 'vulcan', level: 1, missiles: 0,
+      id, lives, x: W / 2, y: H - 48, alive: true, timer: 0, invuln: 120, weapon: 'vulcan', owned: ['vulcan'], level: 1, missiles: 0,
       bombs: START_BOMBS, bank: 0, cooldown: 0, missileCooldown: 0, shield: this.shielded, shieldT: 0,
     };
   }
@@ -360,7 +377,10 @@ export class World {
     // Two ships share the orbs, so a 2-player game gets one more per stage: weapon and missiles in turn.
     if (this.duo && !this.duoOrb && this.dist >= this.stage.length * DUO_ORB_AT) {
       this.duoOrb = true;
-      this.spawn(ENEMIES.carrier, W / 2, -20, [], this.stageIdx % 2 ? 'missile' : 'weapon');
+      // A weapon the nearer ship hasn't got yet, if there is one.
+      const near = this.target(W / 2, H);
+      const k = WEAPONS.find((x) => !near.owned.includes(x)) ?? WEAPONS[this.stageIdx % WEAPONS.length];
+      this.spawn(ENEMIES.carrier, W / 2, -20, [], this.stageIdx % 2 ? 'missile' : k);
     }
     if (!this.boss && this.warning === 0 && this.dist >= this.stage.length) {
       this.warning = WARNING_FRAMES;
@@ -425,10 +445,64 @@ export class World {
     const bankTo = Math.max(-1, Math.min(1, dx + c.dragX * 0.5));
     p.bank += (bankTo - p.bank) * 0.2;
 
+    if (c.swap) this.swap(p);
     if (c.bomb && p.bombs > 0 && this.bombT < 0) this.dropBomb(p);
     if (c.fire) this.fire(p);
     if (p.cooldown > 0) p.cooldown--;
     if (p.missileCooldown > 0) p.missileCooldown--;
+  }
+
+  /** On to the next weapon in the arsenal. */
+  private swap(p: Player) {
+    if (p.owned.length < 2) return;
+    const i = WEAPONS.indexOf(p.weapon);
+    for (let k = 1; k <= WEAPONS.length; k++) {
+      const next = WEAPONS[(i + k) % WEAPONS.length];
+      if (!p.owned.includes(next)) continue;
+      p.weapon = next;
+      p.cooldown = 0;
+      sfx.swap();
+      this.popup(p.x, p.y - 22, `${next.toUpperCase()} ${p.level >= MAX_LEVEL ? 'MAX' : p.level}`);
+      return;
+    }
+  }
+
+  /** Gives ship p weapon `k`, if it hasn't got it yet. True if it is new. */
+  arm(p: Player, k: Weapon) {
+    if (p.owned.includes(k)) return false;
+    p.owned = WEAPONS.filter((x) => x === k || p.owned.includes(x));
+    return true;
+  }
+
+  /**
+   * Plasma: a bolt to the nearest enemy in reach, then on from each to the nearest not yet hit,
+   * level + 1 in all. Weak on one big target, strong on many small ones.
+   */
+  private zap(p: Player) {
+    const dmg = 0.8 + p.level * 0.1;
+    const hittable = (e: Enemy) => !e.dead && !e.hidden && !e.armored && e.hp > 0 && e.x > 0 && e.x < W && e.y > 0 && e.y < H;
+    const pts = [p.x, p.y - 12];
+    const hit = new Set<Enemy>();
+    let x = p.x, y = p.y - 12, reach = PLASMA_REACH + p.level * 10;
+    for (let n = 0; n <= p.level; n++) {
+      let best: Enemy | null = null, bd = Infinity;
+      for (const e of this.enemies) {
+        if (hit.has(e) || !hittable(e)) continue;
+        // Ahead of the ship counts as nearer.
+        const d = Math.hypot(e.x - x, e.y - y) + (n === 0 && e.y > p.y ? 40 : 0);
+        if (d < reach && d < bd) (bd = d), (best = e);
+      }
+      if (!best) break;
+      hit.add(best);
+      pts.push(best.x, best.y);
+      x = best.x;
+      y = best.y;
+      reach = PLASMA_JUMP;
+    }
+    // Nothing in reach: a short crackle off the nose.
+    if (!hit.size) pts.push(p.x + (this.rng() - 0.5) * 16, p.y - 30 - this.rng() * 10);
+    this.bolts.push({ pts, t: 0 });
+    for (const e of hit) this.damage(e, dmg);
   }
 
   private fire(p: Player) {
@@ -443,7 +517,11 @@ export class World {
       sfx.missile();
     }
     if (p.cooldown > 0) return;
-    if (p.weapon === 'vulcan') {
+    if (p.weapon === 'plasma') {
+      p.cooldown = PLASMA_RATE;
+      this.zap(p);
+      sfx.plasma();
+    } else if (p.weapon === 'vulcan') {
       p.cooldown = 6;
       // Streams, and how far apart they fan, per level.
       const n = [2, 3, 5, 7, 9][p.level - 1];
@@ -655,11 +733,6 @@ export class World {
     this.items = this.items.filter((it) => !it.dead);
   }
 
-  /** The weapon item's current face, cycling between vulcan and laser. */
-  static weaponFace(it: Item): Weapon {
-    return Math.floor(it.t / ITEM_CYCLE) % 2 ? 'laser' : 'vulcan';
-  }
-
   private collect(it: Item, p: Player) {
     const bonus = (label: string) => {
       this.addScore(5000);
@@ -677,14 +750,14 @@ export class World {
     // Say what it did, over the ship.
     const said = (text: string) => this.popup(p.x, p.y - 22, text);
     const lv = (n: number, max: number) => (n >= max ? 'MAX' : String(n));
-    if (it.kind === 'weapon') {
-      // Either colour powers up; the other one also switches weapon, keeping the level.
-      const face = World.weaponFace(it);
-      const switched = face !== p.weapon;
-      p.weapon = face;
+    if ((WEAPONS as ItemKind[]).includes(it.kind)) {
+      // Every weapon powers up; one you haven't got joins the arsenal and is put in your hands.
+      const k = it.kind as WeaponKind;
+      const fresh = this.arm(p, k);
+      if (fresh) p.weapon = k;
       if (p.level < MAX_LEVEL) p.level++;
-      else if (!switched) return bonus('5000');
-      said(`${face === 'vulcan' ? 'VULCAN' : 'LASER'} ${lv(p.level, MAX_LEVEL)}`);
+      else if (!fresh) return bonus('5000');
+      said(fresh ? `NEW ${k.toUpperCase()}` : `${p.weapon.toUpperCase()} ${lv(p.level, MAX_LEVEL)}`);
     } else if (it.kind === 'missile') {
       if (p.missiles < MAX_MISSILES) p.missiles++;
       else return bonus('5000');
@@ -732,6 +805,8 @@ export class World {
   }
 
   private updateFx() {
+    for (const b of this.bolts) b.t++;
+    this.bolts = this.bolts.filter((b) => b.t < 4);
     for (const b of this.blasts) {
       b.t++;
       if (b.ground) b.y += this.scroll;
@@ -777,7 +852,8 @@ export class World {
           s.hit!.add(e);
           if (e.armored) s.dead = true;
         } else s.dead = true;
-        this.damage(e, s.dmg);
+        // Boss armour takes the edge off a laser, so it isn't the only weapon worth having there.
+        this.damage(e, s.kind === 'laser' && e.def.name === 'part' ? s.dmg * LASER_VS_BOSS : s.dmg);
         if (s.dead) this.particles.push({ x: s.x, y: s.y, vx: 0, vy: 0, life: 4, color: '#fcfcfc' });
       }
     }

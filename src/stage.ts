@@ -42,7 +42,7 @@ export const swoop = (cx: number, turn: number): Run => (w) => {
 };
 
 export const gun = (x: number, row = 70, drop?: ItemKind): Run => (w) => void w.spawn(gunship, x, -30, [row], drop);
-export const cargo = (x: number, drop: ItemKind = 'weapon'): Run => (w) => void w.spawn(carrier, x, -20, [], drop);
+export const cargo = (x: number, drop: ItemKind = 'vulcan'): Run => (w) => void w.spawn(carrier, x, -20, [], drop);
 
 /** Tanks rolling in a column from the top, or across from a side when vx is set. */
 export const tanks = (x: number, n: number, vx = 0, vy = 0.3, y = -14): Run => (w) => {

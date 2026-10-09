@@ -1,6 +1,6 @@
 import { Game, MENU, MUSIC_NAMES, NAME_LEN, CARD_FRAMES, TALLY_AT } from './game';
 import { World, Player, Shot, Blast, Item, MAX_LEVEL, MAX_MISSILES, SHIELD_REGEN, WARNING_FRAMES } from './world';
-import { Enemy, DESTROYER_GUNS, LAVABOAT_GUN, popupOpen, magmaRise, siloOpen, hangarOpen, GRAVITY_R, STEALTH_SHOW } from './enemies';
+import { Enemy, ItemKind, WeaponKind, WEAPONS, DESTROYER_GUNS, LAVABOAT_GUN, popupOpen, magmaRise, siloOpen, hangarOpen, GRAVITY_R, STEALTH_SHOW } from './enemies';
 import { aimAt } from './bullets';
 import { SUB_CYCLE, SUB_UP, SUB_DOWN, ICEBREAKER_GUNS, CHOPPER_HUB, SHIELD_R, SHIELD_GAP, shieldGap } from './mid';
 import { Boss, walkerHead, LIGHT_SPREAD, BEAM_AIM, BEAM_LOCK, MORTAR_FUSE, MORTAR_R, CHARGE_FRAMES } from './boss';
@@ -125,13 +125,13 @@ function drawGroundEnemy(ctx: Ctx, e: Enemy, w: World, frame: number) {
   if (e.def.name === 'artillery') drawAt(ctx, rotated('enemies/artillery_barrel', stepFor(Math.sin(e.aim), Math.cos(e.aim))), e.x, e.y);
 }
 
-/** Laser colours per level: outer, body, core. Level 5 turns to violet plasma. */
+/** Laser colours per level: outer, body, core. Level 5 burns white-hot. */
 const LASER = [
   ['#0040b8', '#2878f8', '#a8d8fc'],
   ['#0058f8', '#3cbcfc', '#d8f0fc'],
   ['#0078f8', '#58d8fc', '#fcfcfc'],
   ['#00a0f8', '#80ecfc', '#fcfcfc'],
-  ['#7038f8', '#c090fc', '#fcfcfc'],
+  ['#00c8f8', '#b8f8fc', '#fcfcfc'],
 ];
 
 function drawShot(ctx: Ctx, s: Shot, frame: number) {
@@ -152,11 +152,11 @@ function drawShot(ctx: Ctx, s: Shot, frame: number) {
   } else if (s.kind === 'laser') {
     const wd = s.width!;
     const [outer, body, core] = LASER[lv - 1];
-    // Level 5 ripples like plasma.
+    // Level 5 ripples with heat.
     const wob = lv >= 5 ? Math.round(Math.sin((s.y + frame * 3) / 5) * 1.5) : 0;
     const left = x - Math.floor(wd / 2) + wob;
     if (lv >= 2) {
-      ctx.fillStyle = lv >= 5 ? 'rgba(160,96,248,0.3)' : 'rgba(60,188,252,0.25)';
+      ctx.fillStyle = lv >= 5 ? 'rgba(160,240,252,0.32)' : 'rgba(60,188,252,0.25)';
       ctx.fillRect(left - 2, y - 11, wd + 4, 22);
     }
     ctx.fillStyle = outer;
@@ -201,20 +201,66 @@ function drawBlast(ctx: Ctx, b: Blast) {
   } else disc(ctx, b.x, b.y, r * (1.6 - k), '#585858');
 }
 
-const ITEM_SPRITE: Record<string, string> = { missile: 'items/orb_m', bomb: 'items/orb_b', medal: 'items/medal' };
+/** Each pickup: its sprite, the colour it glows in (r,g,b), and its letter for the placeholder. */
+const ITEM_LOOK: Record<ItemKind, [string, string, string]> = {
+  vulcan: ['items/vulcan', '248,88,56', 'V'],
+  laser: ['items/laser', '60,188,252', 'L'],
+  plasma: ['items/plasma', '176,96,248', 'P'],
+  missile: ['items/missile', '88,216,84', 'M'],
+  bomb: ['items/bomb', '248,216,56', 'B'],
+  medal: ['items/medal', '', ''],
+};
+
+/** Frames after which a power-up drifts away (see updateItems); it blinks before then. */
+const ITEM_LEAVES = 60 * 12;
 
 function drawItem(ctx: Ctx, it: Item, frame: number) {
-  let name = ITEM_SPRITE[it.kind];
-  let letter = it.kind === 'missile' ? 'M' : it.kind === 'bomb' ? 'B' : '';
-  if (it.kind === 'weapon') {
-    const laser = World.weaponFace(it) === 'laser';
-    name = laser ? 'items/orb_l' : 'items/orb_v';
-    letter = laser ? 'L' : 'V';
-  }
-  const bob = it.kind === 'medal' ? 0 : Math.round(Math.sin(frame / 8));
+  const [name, glow, letter] = ITEM_LOOK[it.kind];
+  if (it.kind === 'medal') return drawAt(ctx, spr(name), it.x, it.y);
+  if (it.t > ITEM_LEAVES - 90 && (frame >> 2) % 2) return;
+  const bob = Math.round(Math.sin(frame / 8));
+  // A soft glow in its colour, pulsing, so it reads over any ground.
+  const r = 14 + Math.sin(frame / 6) * 2;
+  const g = ctx.createRadialGradient(it.x, it.y + bob, 2, it.x, it.y + bob, r);
+  g.addColorStop(0, `rgba(${glow},0.55)`);
+  g.addColorStop(1, `rgba(${glow},0)`);
+  ctx.fillStyle = g;
+  ctx.fillRect(it.x - r, it.y + bob - r, r * 2, r * 2);
   drawAt(ctx, spr(name), it.x, it.y + bob);
-  // The placeholder orbs need their letter.
-  if (letter && !has(name)) drawTextShadow(ctx, letter, Math.round(it.x) - 2, Math.round(it.y) - 3 + bob);
+  if (!has(name)) drawTextShadow(ctx, letter, Math.round(it.x) - 2, Math.round(it.y) - 3 + bob);
+}
+
+/** Plasma bolts: jagged violet lightning with a white core, new zigzags every frame. */
+function drawBolts(ctx: Ctx, w: World, frame: number) {
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineJoin = 'round';
+  for (const b of w.bolts) {
+    const path: [number, number][] = [];
+    for (let i = 0; i + 3 < b.pts.length; i += 2) {
+      const [x0, y0, x1, y1] = b.pts.slice(i, i + 4);
+      const len = Math.hypot(x1 - x0, y1 - y0) || 1;
+      const nx = -(y1 - y0) / len, ny = (x1 - x0) / len;
+      const n = Math.max(2, Math.round(len / 10));
+      for (let k = 0; k < n; k++) {
+        const f = k / n, h = hash(frame * 31 + i * 7 + k);
+        const off = k ? ((h % 9) - 4) * Math.min(1, len / 40) : 0;
+        path.push([x0 + (x1 - x0) * f + nx * off, y0 + (y1 - y0) * f + ny * off]);
+      }
+      if (i + 4 >= b.pts.length) path.push([x1, y1]);
+    }
+    const fade = 1 - b.t / 4;
+    for (const [width, color] of [[7, `rgba(120,40,248,${0.5 * fade})`], [3, `rgba(176,96,248,${fade})`], [1, `rgba(240,220,252,${fade})`]] as const) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.beginPath();
+      path.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+      ctx.stroke();
+    }
+    // Where it strikes, a spark.
+    for (let i = 2; i < b.pts.length; i += 2) disc(ctx, b.pts[i], b.pts[i + 1], 3 - b.t * 0.5, `rgba(220,180,252,${fade})`);
+  }
+  ctx.restore();
 }
 
 function drawBullets(ctx: Ctx, w: World, frame: number) {
@@ -707,6 +753,7 @@ function drawWorld(ctx: Ctx, w: World, frame: number) {
   drawFields(ctx, w, frame);
 
   for (const s of w.shots) drawShot(ctx, s, frame);
+  drawBolts(ctx, w, frame);
   if (b && !b.def.ground) drawBoss(ctx, b, frame);
   for (const e of w.enemies) {
     if (e.def.ground || !e.def.sprite) continue;
@@ -832,15 +879,23 @@ function drawBombIcon(ctx: Ctx, x: number, y: number) {
   ctx.fillRect(x + 2, y + 1, 1, 3);
 }
 
+/** Each weapon's colour and letter on the status panel. */
+const WEAPON_LOOK: Record<WeaponKind, [string, string]> = { vulcan: ['#f85838', 'V'], laser: [BLUE, 'L'], plasma: ['#b060f8', 'P'] };
+
 function drawStatus(ctx: Ctx, w: World, p: Player, x0: number, frame: number) {
-  const vulcan = p.weapon === 'vulcan';
-  const color = vulcan ? '#f85838' : BLUE;
+  const [color, letter] = WEAPON_LOOK[p.weapon];
   const y = H - 12;
   ctx.fillStyle = '#000';
   ctx.fillRect(x0 - 1, y - 1, 81, 10);
   ctx.fillStyle = color;
   ctx.fillRect(x0, y, 9, 8);
-  drawText(ctx, vulcan ? 'V' : 'L', x0 + 2, y + 1 - 0, '#000');
+  drawText(ctx, letter, x0 + 2, y + 1 - 0, '#000');
+  // The arsenal: a lamp per weapon, lit if you have it, bright for the one in use.
+  WEAPONS.forEach((k, i) => {
+    const own = p.owned.includes(k);
+    ctx.fillStyle = k === p.weapon ? WEAPON_LOOK[k][0] : own ? '#a8a8a8' : '#383838';
+    ctx.fillRect(x0 + 10, y + i * 3, 2, 2);
+  });
   const pips = (x: number, n: number, max: number, on: string, wd: number) => {
     const full = n >= max && (frame >> 4) % 2 === 0;
     for (let k = 0; k < max; k++) {
@@ -848,11 +903,11 @@ function drawStatus(ctx: Ctx, w: World, p: Player, x0: number, frame: number) {
       ctx.fillRect(x + k * (wd + 1), y + 2, wd, 4);
     }
   };
-  pips(x0 + 11, p.level, MAX_LEVEL, color, 5);
+  pips(x0 + 14, p.level, MAX_LEVEL, color, 5);
   ctx.fillStyle = '#58d854';
-  ctx.fillRect(x0 + 44, y, 7, 8);
-  drawText(ctx, 'M', x0 + 45, y + 1, '#000');
-  pips(x0 + 53, p.missiles, MAX_MISSILES, '#58d854', 4);
+  ctx.fillRect(x0 + 45, y, 7, 8);
+  drawText(ctx, 'M', x0 + 46, y + 1, '#000');
+  pips(x0 + 54, p.missiles, MAX_MISSILES, '#58d854', 4);
   if (!w.shielded) return;
   // Easy mode: the shield's charge in a thin bar over the panel.
   ctx.fillStyle = '#000';

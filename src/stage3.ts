@@ -48,7 +48,7 @@ const leadShip = (w: World) => {
 
 const WAVES: Wave[] = [
   // Out on the polar sea, an icebreaker.
-  { at: 440, run: breaker() },
+  { at: 440, run: breaker('laser') },
   // The polar sea.
   { at: 60, run: swarm(120) },
   { at: 200, run: ship(60) },
@@ -67,7 +67,7 @@ const WAVES: Wave[] = [
   { at: 1800, run: both(tanks(40, 4), tanks(200, 4)) },
   { at: 1900, run: scramble(4, 60) },
   { at: 2000, run: both(battery(60), battery(180)) },
-  { at: 2100, run: cargo(80) },
+  { at: 2100, run: cargo(80, 'plasma') },
   { at: 2180, run: swarm(160, 8) },
   { at: 2220, run: both(chopper(200, 70), cross(2)) },
   { at: 2300, run: both(tanks(-12, 4, 0.6, 0, 100), dive(180, 5)) },

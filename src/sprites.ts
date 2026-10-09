@@ -109,10 +109,11 @@ const PLACEHOLDER: Record<string, [number, number, string, 'jet' | 'box' | 'disc
   'boss/boss6_open': [176, 144, '#583858', 'box'],
   'boss/boss_open': [128, 96, '#7a5050', 'jet'],
   'items/medal': [16, 16, '#f8b800', 'disc'],
-  'items/orb_v': [16, 16, '#f83800', 'disc'],
-  'items/orb_l': [16, 16, '#3cbcfc', 'disc'],
-  'items/orb_m': [16, 16, '#58d854', 'disc'],
-  'items/orb_b': [16, 16, '#f8d838', 'disc'],
+  'items/vulcan': [24, 24, '#f85838', 'box'],
+  'items/laser': [24, 24, '#3cbcfc', 'box'],
+  'items/plasma': [24, 24, '#b060f8', 'box'],
+  'items/missile': [24, 24, '#58d854', 'box'],
+  'items/bomb': [24, 24, '#f8d838', 'disc'],
 };
 
 function placeholder(name: string): Sprite {

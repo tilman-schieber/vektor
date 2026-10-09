@@ -91,7 +91,7 @@ const WAVES: Wave[] = [
   // The ash plains.
   { at: 2280, run: silos(60, 180) },
   { at: 2380, run: scramble(4, 60) },
-  { at: 2480, run: cargo(80) },
+  { at: 2480, run: cargo(80, 'laser') },
   { at: 2560, run: both(heavy(70), heavy(170)) },
   { at: 2700, run: both(silos(40, 120, 200), swoop(120, 160)) },
   { at: 2840, run: loops(180, 5, 110) },
@@ -100,7 +100,7 @@ const WAVES: Wave[] = [
   { at: 3260, run: swarm(80, 8) },
   { at: 3300, run: swarm(160, 8) },
   // The crater fortress.
-  { at: 3440, run: cargo(160) },
+  { at: 3440, run: cargo(160, 'plasma') },
   { at: 3520, run: silos(40, 120, 200) },
   { at: 3660, run: both(heavy(120), scramble(3)) },
   { at: 3800, run: both(silos(60, 180), cross(3)) },

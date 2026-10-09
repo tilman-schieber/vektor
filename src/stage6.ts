@@ -80,7 +80,7 @@ const WAVES: Wave[] = [
   // Open space.
   { at: 60, run: dive(80) },
   { at: 150, run: dive(160) },
-  { at: 240, run: cargo(120) },
+  { at: 240, run: cargo(120, 'plasma') },
   { at: 330, run: sweep(true, 80) },
   { at: 440, run: cloak(70) },
   { at: 500, run: cloak(170, 110) },
@@ -95,7 +95,7 @@ const WAVES: Wave[] = [
   { at: 1260, run: shower(5, 1) },
   { at: 1360, run: both(dive(40, 4), dive(200, 4)) },
   { at: 1440, run: both(rock(120, true, 0, 0.6), mines(30, 210)) },
-  { at: 1540, run: cargo(160) },
+  { at: 1540, run: cargo(160, 'laser') },
   { at: 1620, run: shower(7, 2) },
   { at: 1720, run: scramble(3) },
   { at: 1800, run: both(well(60, 70), rock(190, false, -0.3)) },

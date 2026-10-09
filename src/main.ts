@@ -35,6 +35,8 @@ const KEYS: Record<string, Action> = {
   x: 'bomb',
   shift: 'bomb',
   k: 'bomb',
+  c: 'swap',
+  e: 'swap',
   enter: 'start',
   p: 'start',
   escape: 'back',
@@ -58,6 +60,7 @@ const P2_KEYS: Record<string, Action> = {
   Period: 'fire',
   Slash: 'bomb',
   ShiftRight: 'bomb',
+  Comma: 'swap',
 };
 /** Player 2's keys and pad count as player 2's only in a 2-player game, while the ships fly. */
 const twoFlying = () => game.settings.players > 1 && (game.phase === 'play' || game.phase === 'clear' || game.phase === 'ending');
@@ -123,13 +126,15 @@ setupDrag(
   },
 );
 
-// Gamepads, in the standard mapping: d-pad or left stick to move, A or X fire, B or Y bomb,
-// Start pauses, Select quits from pause. Y opens the scores on the title screen.
+// Gamepads, in the standard mapping: d-pad or left stick to move, A or X fire, B or Y bomb, LB or
+// RB switch weapon, Start pauses, Select quits from pause. Y opens the scores on the title screen.
 const PAD_BUTTONS: [number, Action][] = [
   [0, 'fire'],
   [2, 'fire'],
   [1, 'bomb'],
   [3, 'bomb'],
+  [4, 'swap'],
+  [5, 'swap'],
   [9, 'start'],
   [8, 'quit'],
   [12, 'up'],

@@ -56,7 +56,7 @@ const WAVES: Wave[] = [
   { at: 1560, run: both(pillbox(40), pillbox(120), pillbox(200)) },
   // Jungle and the river.
   { at: 1700, run: both(swoop(60, 120), swoop(180, 120)) },
-  { at: 1780, run: cargo(60) },
+  { at: 1780, run: cargo(60, 'laser') },
   { at: 1860, run: both(tanks(30, 4), tanks(210, 4)) },
   { at: 1980, run: sweep(false, 90, 8) },
   { at: 2060, run: pillbox(120) },
