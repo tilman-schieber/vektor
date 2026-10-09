@@ -328,6 +328,8 @@ Generations spent: 65 (balance went from 892 to 827). Palette: black space, blue
 
 Levels: 0 space, 1 nebula, 2 asteroid rock, 3 station hull.
 
+**Removed.** These three tilesets made the stage look like a planet surface. They were replaced by `space_hull` below (open space plus the station; stars, nebulae and the planet are drawn in code), and their files were deleted from the repo. The ids stay here so they can be fetched from PixelLab again.
+
 | file | tileset id | lower → upper | transition | notes |
 |---|---|---|---|---|
 | tiles/space_nebula.png/.json/_example.png | d855d71a-6f44-4d42-8651-922633127aa6 | "black outer space with scattered small white and pale blue stars" (lower_base 6226561d…) → "dense bright purple and teal nebula gas clouds, swirling violet and cyan glowing cosmic dust" (upper_base 1b838527…) | "wispy thin purple gas tendrils fading into black space", **round**, 0.5, enhance false, text_guidance 10, medium detail | Blue-violet gas field with a soft brighter rim; the space tile has a few blue star pixels (they repeat every tile, so the game's own starfield should do the real work). The nebula reads as slightly raised. Teal is only in sparse specks. See the lesson about swapped terrains below. |
