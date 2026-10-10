@@ -12,7 +12,7 @@ Easy mode (MODE on the title screen) gives the ship a shield that takes the firs
 
 ## Weapons and items
 
-Carriers drop items when shot down, each a little weapon of its own. There are three main weapons and one power level, up to 5, for whichever you fly. You start with the vulcan; picking up a weapon you haven't got adds it to your arsenal and puts it in your hands, and every weapon pickup raises the level. Switch between the ones you have with C (a shoulder button on a gamepad, SWAP on a phone).
+Carriers drop items when shot down, each a little weapon of its own. There are three main weapons and one power level, up to 5, for whichever you fly. You start with the vulcan; a weapon pickup puts that weapon in your hands (adding it to your arsenal if it's new) and raises the level. At level 5 the plasma's lightning reaches across the whole screen. Switch between the ones you have with C (a shoulder button on a gamepad, SWAP on a phone).
 
 | Item | What it does |
 | --- | --- |

@@ -13,14 +13,20 @@ const enum Level {
   Base = 3,
 }
 
+/** Tile rows of open sea between the islands and the coast, room for the submarine to come up. */
+const SEA = 22;
+
 function profile(seed: number, x: number, j: number) {
   const n = noise(seed, x / 3.5, j / 3.5) * 0.7 + noise(seed + 1, x / 1.5, j / 1.5) * 0.3;
-  if (j < 52) {
+  if (j < 34) {
     // Islands: broad low-frequency blobs, sand rings round a jungle middle.
     const isle = noise(seed + 2, x / 5, j / 5) + n * 0.25;
     if (j < 16 || isle < 0.45) return Level.Ocean;
     return isle > 0.75 ? Level.Jungle : Level.Sand;
   }
+  // From here on, everything comes SEA rows later.
+  j -= SEA;
+  if (j < 34) return Level.Ocean;
   // The coast comes in on a slant.
   const coast = 60 + Math.sin(x / 3) * 3 + (x - COLS / 2) * 0.7;
   if (j < coast) return Level.Ocean;
@@ -45,58 +51,60 @@ const WAVES: Wave[] = [
   { at: 330, run: cargo(120) },
   { at: 860, run: swoop(70, 160) },
   { at: 900, run: swoop(170, 160) },
+  { at: 1060, run: dive(80) },
+  { at: 1180, run: sweep(false, 90) },
   // The coast.
-  { at: 1000, run: both(tanks(40, 3), cargo(190, 'missile')) },
-  { at: 1080, run: sweep(true, 100) },
-  { at: 1140, run: tanks(200, 3) },
-  { at: 1200, run: both(pillbox(70), pillbox(170)) },
-  { at: 1280, run: dive(120, 6, 10) },
-  { at: 1380, run: tanks(-12, 4, 0.6, 0, 120) },
-  { at: 1470, run: gun(120, 70) },
-  { at: 1560, run: both(pillbox(40), pillbox(120), pillbox(200)) },
+  { at: 1352, run: both(tanks(40, 3), cargo(190, 'missile')) },
+  { at: 1432, run: sweep(true, 100) },
+  { at: 1492, run: tanks(200, 3) },
+  { at: 1552, run: both(pillbox(70), pillbox(170)) },
+  { at: 1632, run: dive(120, 6, 10) },
+  { at: 1732, run: tanks(-12, 4, 0.6, 0, 120) },
+  { at: 1822, run: gun(120, 70) },
+  { at: 1912, run: both(pillbox(40), pillbox(120), pillbox(200)) },
   // Jungle and the river.
-  { at: 1700, run: both(swoop(60, 120), swoop(180, 120)) },
-  { at: 1780, run: cargo(60, 'laser') },
-  { at: 1860, run: both(tanks(30, 4), tanks(210, 4)) },
-  { at: 1980, run: sweep(false, 90, 8) },
-  { at: 2060, run: pillbox(120) },
-  { at: 2120, run: dive(80, 5) },
-  { at: 2160, run: dive(160, 5) },
-  { at: 2260, run: gun(120, 70, 'bomb') },
-  { at: 2400, run: both(tanks(W + 12, 4, -0.6, 0, 80), sweep(true, 120)) },
-  { at: 2500, run: both(pillbox(50), pillbox(190)) },
-  { at: 2580, run: cargo(160) },
-  { at: 2660, run: both(swoop(120, 180), dive(30, 4), dive(210, 4)) },
-  { at: 2800, run: gun(120, 70) },
-  { at: 2960, run: tanks(120, 5) },
-  { at: 3040, run: sweep(true, 70, 8) },
-  { at: 3100, run: sweep(false, 110, 8) },
-  { at: 3200, run: both(pillbox(30), pillbox(90), pillbox(150), pillbox(210)) },
+  { at: 2052, run: both(swoop(60, 120), swoop(180, 120)) },
+  { at: 2132, run: cargo(60, 'laser') },
+  { at: 2212, run: both(tanks(30, 4), tanks(210, 4)) },
+  { at: 2332, run: sweep(false, 90, 8) },
+  { at: 2412, run: pillbox(120) },
+  { at: 2472, run: dive(80, 5) },
+  { at: 2512, run: dive(160, 5) },
+  { at: 2612, run: gun(120, 70, 'bomb') },
+  { at: 2752, run: both(tanks(W + 12, 4, -0.6, 0, 80), sweep(true, 120)) },
+  { at: 2852, run: both(pillbox(50), pillbox(190)) },
+  { at: 2932, run: cargo(160) },
+  { at: 3012, run: both(swoop(120, 180), dive(30, 4), dive(210, 4)) },
+  { at: 3152, run: gun(120, 70) },
+  { at: 3312, run: tanks(120, 5) },
+  { at: 3392, run: sweep(true, 70, 8) },
+  { at: 3452, run: sweep(false, 110, 8) },
+  { at: 3552, run: both(pillbox(30), pillbox(90), pillbox(150), pillbox(210)) },
   // The base.
-  { at: 3360, run: cargo(100, 'missile') },
-  { at: 3420, run: both(tanks(40, 3), tanks(200, 3)) },
-  { at: 3500, run: both(pillbox(60), pillbox(180), swoop(120, 140)) },
-  { at: 3600, run: gun(120, 60) },
-  { at: 3700, run: both(pillbox(40), pillbox(120), pillbox(200)) },
-  { at: 3780, run: both(dive(50, 6, 8), dive(190, 6, 8)) },
-  { at: 3880, run: cargo(140, 'missile') },
-  { at: 3960, run: both(tanks(-12, 4, 0.6, 0, 100), tanks(W + 12, 4, -0.6, 0, 160)) },
-  { at: 4060, run: both(pillbox(80), pillbox(160)) },
-  { at: 4140, run: both(gun(70, 70), gun(170, 70)) },
-  { at: 4300, run: both(swoop(80, 150), swoop(160, 150)) },
-  { at: 4400, run: cargo(120, 'bomb') },
+  { at: 3712, run: cargo(100, 'missile') },
+  { at: 3772, run: both(tanks(40, 3), tanks(200, 3)) },
+  { at: 3852, run: both(pillbox(60), pillbox(180), swoop(120, 140)) },
+  { at: 3952, run: gun(120, 60) },
+  { at: 4052, run: both(pillbox(40), pillbox(120), pillbox(200)) },
+  { at: 4132, run: both(dive(50, 6, 8), dive(190, 6, 8)) },
+  { at: 4232, run: cargo(140, 'missile') },
+  { at: 4312, run: both(tanks(-12, 4, 0.6, 0, 100), tanks(W + 12, 4, -0.6, 0, 160)) },
+  { at: 4412, run: both(pillbox(80), pillbox(160)) },
+  { at: 4492, run: both(gun(70, 70), gun(170, 70)) },
+  { at: 4652, run: both(swoop(80, 150), swoop(160, 150)) },
+  { at: 4752, run: cargo(120, 'bomb') },
   // More variety: helicopters, aerobatics, hatches.
-  { at: 1120, run: chopper(200, 90) },
-  { at: 1940, run: chopper(40, 80) },
-  { at: 2340, run: cross(3) },
-  { at: 3060, run: loops(180, 4, 130) },
-  { at: 3640, run: hatch(40, 200) },
-  { at: 4220, run: chopper(120, 80, 'medal') },
+  { at: 1472, run: chopper(200, 90) },
+  { at: 2292, run: chopper(40, 80) },
+  { at: 2692, run: cross(3) },
+  { at: 3412, run: loops(180, 4, 130) },
+  { at: 3992, run: hatch(40, 200) },
+  { at: 4572, run: chopper(120, 80, 'medal') },
 ];
 
 export const STAGE1: Stage = {
   name: 'COAST',
-  length: 4600,
+  length: 4952,
   waves: WAVES,
   ground: {
     sets: ['ocean_beach', 'beach_jungle', 'jungle_base'],

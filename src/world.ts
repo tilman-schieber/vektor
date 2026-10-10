@@ -136,12 +136,13 @@ export const NO_CONTROLS: Controls = { dx: 0, dy: 0, dragX: 0, dragY: 0, fire: f
 const PLAYER_SPEED = 2;
 const SCROLL = 0.5;
 /** The weapon item swaps colour this often. */
-/** Plasma: frames between zaps, how far the first bolt reaches (plus per level), and how far it jumps on. */
+/** Plasma: frames between zaps. */
 const PLASMA_RATE = 6;
 /** How much of a laser's damage gets through a boss's armour. */
 const LASER_VS_BOSS = 0.65;
-const PLASMA_REACH = 140;
-const PLASMA_JUMP = 70;
+/** Plasma, per level: how far the first bolt reaches, and how far it jumps on. At MAX both span the screen. */
+const PLASMA_REACH = [140, 190, 250, 320, 400];
+const PLASMA_JUMP = [70, 110, 170, 260, 400];
 
 /** A plasma bolt for the screen: the points it runs through, and frames it has shown. */
 export interface Bolt {
@@ -483,7 +484,7 @@ export class World {
     const hittable = (e: Enemy) => !e.dead && !e.hidden && !e.armored && e.hp > 0 && e.x > 0 && e.x < W && e.y > 0 && e.y < H;
     const pts = [p.x, p.y - 12];
     const hit = new Set<Enemy>();
-    let x = p.x, y = p.y - 12, reach = PLASMA_REACH + p.level * 10;
+    let x = p.x, y = p.y - 12, reach = PLASMA_REACH[p.level - 1];
     for (let n = 0; n <= p.level; n++) {
       let best: Enemy | null = null, bd = Infinity;
       for (const e of this.enemies) {
@@ -497,7 +498,7 @@ export class World {
       pts.push(best.x, best.y);
       x = best.x;
       y = best.y;
-      reach = PLASMA_JUMP;
+      reach = PLASMA_JUMP[p.level - 1];
     }
     // Nothing in reach: a short crackle off the nose.
     if (!hit.size) pts.push(p.x + (this.rng() - 0.5) * 16, p.y - 30 - this.rng() * 10);
@@ -751,13 +752,14 @@ export class World {
     const said = (text: string) => this.popup(p.x, p.y - 22, text);
     const lv = (n: number, max: number) => (n >= max ? 'MAX' : String(n));
     if ((WEAPONS as ItemKind[]).includes(it.kind)) {
-      // Every weapon powers up; one you haven't got joins the arsenal and is put in your hands.
+      // Every weapon powers up and is put in your hands; one you haven't got joins the arsenal.
       const k = it.kind as WeaponKind;
       const fresh = this.arm(p, k);
-      if (fresh) p.weapon = k;
+      const switched = p.weapon !== k;
+      if (switched) (p.weapon = k), (p.cooldown = 0);
       if (p.level < MAX_LEVEL) p.level++;
-      else if (!fresh) return bonus('5000');
-      said(fresh ? `NEW ${k.toUpperCase()}` : `${p.weapon.toUpperCase()} ${lv(p.level, MAX_LEVEL)}`);
+      else if (!switched) return bonus('5000');
+      said(fresh ? `NEW ${k.toUpperCase()}` : `${k.toUpperCase()} ${lv(p.level, MAX_LEVEL)}`);
     } else if (it.kind === 'missile') {
       if (p.missiles < MAX_MISSILES) p.missiles++;
       else return bonus('5000');
