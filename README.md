@@ -50,6 +50,8 @@ Stage clear pays a no-miss bonus and 3000 for every bomb you didn't use.
 
 A gamepad works too: stick or d-pad to fly, A (or X) to fire, B (or Y) to bomb, LB or RB to switch weapon, Start to pause and Select to quit from the pause screen. On the title screen Y shows the high scores; when typing a name, Up/Down pick a letter, A enters it and B rubs one out.
 
+**D-pad not working on a Mac?** Cheap SNES-style USB pads (DragonRise, `0079:0011`, sold as "USB Gamepad") describe their d-pad in a way Chrome on macOS can't read: it sees the buttons but not the d-pad. Open the game with `?webhid` (https://gh.tschieber.de/vektor/?webhid) and click CONNECT GAMEPAD at the top right to read the d-pad over WebHID instead, then press one of the pad's buttons so the browser reports the pad. Chrome remembers the pad after that. Chrome and Edge only, as other browsers have no WebHID. The code is in `src/hidpad.ts`.
+
 On phones, drag anywhere on the screen to fly: the ship moves with your finger and fires while it is down. SWAP and BOMB are below the screen.
 
 ## Art
