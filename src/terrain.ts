@@ -1,6 +1,7 @@
 // The ground: a grid of terrain levels at tile corners (stage 1: 0 ocean, 1 sand, 2 jungle, 3 base),
 // drawn with Wang tiles that pick their picture from their four corners.
-import { W, H, hash } from './draw';
+import { W, H } from './draw';
+import { hash } from 'arcade-kit/draw';
 import { drawWangTile } from './tiles';
 import { named, spr } from './sprites';
 

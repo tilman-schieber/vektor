@@ -8,8 +8,9 @@ import { STAGES } from './stages';
 import { Terrain, TILE } from './terrain';
 import { MAX_SCORES } from './scores';
 import { HELP_PAGES, wrapText } from './help';
-import { drawText, drawTextCentered, drawTextScaled, drawTextShadow, textWidth } from './font';
-import { Ctx, W, H, WHITE, RED, GREY, LIGHT, DARK, YELLOW, GOLD, BLUE, drawBox, disc, pad, hash } from './draw';
+import { drawText, drawTextCentered, drawTextScaled, drawTextShadow, textWidth } from 'arcade-kit/font';
+import { Ctx, WHITE, RED, GREY, LIGHT, DARK, YELLOW, GOLD, BLUE, drawBox, disc, pad, hash } from 'arcade-kit/draw';
+import { W, H } from './draw';
 import { spr, has, frames, flash, shadow, rotated, stepFor, drawAt, without } from './sprites';
 
 export { W, H };

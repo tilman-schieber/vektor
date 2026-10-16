@@ -13,7 +13,7 @@
 
   async function init() {
     const [world, rng, sprites, modes, boss, enemies, mid] = await Promise.all([
-      import('/src/world.ts'), import('/src/rng.ts'), import('/src/sprites.ts'), import('/src/modes.ts'), import('/src/boss.ts'), import('/src/enemies.ts'), import('/src/mid.ts'),
+      import('/src/world.ts'), import('/node_modules/arcade-kit/src/rng.ts'), import('/src/sprites.ts'), import('/src/modes.ts'), import('/src/boss.ts'), import('/src/enemies.ts'), import('/src/mid.ts'),
     ]);
     M = { ...world, ...rng, has: sprites.has, MODES: modes.MODES, boss, enemies, mid };
     for (let i = 0; i < 400 && !(window.game && window.sim && M.has('boss/boss')); i++) await new Promise((r) => setTimeout(r, 25));

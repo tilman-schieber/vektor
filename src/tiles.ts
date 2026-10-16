@@ -2,7 +2,7 @@
 // A stage's tileset k blends level k (its "lower" terrain) into level k+1 ("upper"); the PixelLab
 // metadata gives every tile's corners and where it sits in the sheet.
 // Without the tileset art it falls back to plain quadrants with a little texture.
-import { hash } from './draw';
+import { hash } from 'arcade-kit/draw';
 import { has, spr } from './sprites';
 import type { Ground } from './terrain';
 

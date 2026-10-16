@@ -1,7 +1,7 @@
 import { MODES, Mode, TABLES, TableId, tableId } from './modes';
 import { loadTables, saveTables, rankFor, ScoreEntry, Tables, MAX_SCORES, load, save, fetchGlobal, submitGlobal, flushPending } from './scores';
 import { sfx, music, TUNE, stageTune, bossKey } from './audio';
-import { makeRng, randomSeed } from './rng';
+import { makeRng, randomSeed } from 'arcade-kit/rng';
 import { World, Controls, MAX_LEVEL, MAX_MISSILES, MAX_BOMBS } from './world';
 import { HELP_PAGES } from './help';
 import { STAGES } from './stages';

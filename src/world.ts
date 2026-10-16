@@ -7,7 +7,7 @@ import { Terrain } from './terrain';
 import { STAGES } from './stages';
 import type { Stage } from './stage';
 import { sfx } from './audio';
-import { Rng } from './rng';
+import { Rng } from 'arcade-kit/rng';
 
 export type Weapon = WeaponKind;
 export const MAX_LEVEL = 5;

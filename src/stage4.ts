@@ -5,7 +5,8 @@ import { gunChopper } from './mid';
 import { COLS, TILE, noise, Terrain } from './terrain';
 import { WALKER } from './boss';
 import { ENEMIES } from './enemies';
-import { W, hash } from './draw';
+import { W } from './draw';
+import { hash } from 'arcade-kit/draw';
 import type { World } from './world';
 
 const enum Level {
