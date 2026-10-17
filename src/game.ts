@@ -456,7 +456,7 @@ export class Game {
 
   // ---------- debug mode ----------
 
-  /** 1-6 stage, N next stage, B boss, U full power and all weapons, I invincible, V next weapon. */
+  /** 1-6 stage, N next stage, B boss, U full power and all weapons, I invincible. */
   private debugKeys(typed: string[]) {
     const w = this.world!;
     for (const k of typed) {
@@ -465,13 +465,6 @@ export class Game {
       else if (k === 'B') this.bossNow();
       else if (k === 'U') for (const p of w.players) Object.assign(p, { level: MAX_LEVEL, peak: MAX_LEVEL, charge: 0, missiles: MAX_MISSILES, bombs: MAX_BOMBS, owned: [...WEAPONS] });
       else if (k === 'I') w.god = !w.god;
-      else if (k === 'V')
-        for (const p of w.players) {
-          // The next weapon, unlocked if need be.
-          const next = WEAPONS[(WEAPONS.indexOf(p.weapon) + 1) % WEAPONS.length];
-          w.arm(p, next);
-          p.weapon = next;
-        }
       else continue;
       sfx.select();
     }

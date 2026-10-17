@@ -68,7 +68,7 @@ npm run dev
 npm run build
 ```
 
-Add `?debug` to the URL (https://gh.tschieber.de/vektor/?debug) for debug mode, which works in the live build too. In play, 1-6 jump to a stage, N to the next one, B calls the boss, U gives full power (weapon 5, five missiles, seven bombs), I toggles invincibility and V switches weapon. Games in debug mode don't go into the high scores.
+Add `?debug` to the URL (https://gh.tschieber.de/vektor/?debug) for debug mode, which works in the live build too. In play, 1-6 jump to a stage, N to the next one, B calls the boss, U gives full power (all three weapons at level 5, five missiles, seven bombs) and I toggles invincibility. Games in debug mode don't go into the high scores.
 
 In a dev build the console has helpers: `skipTo(distance)`, `boss()`, `god()`, `power(level, 'vulcan' | 'laser', missiles)`, and `sim(frames, actions)` to step the game by hand.
 
