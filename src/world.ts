@@ -12,6 +12,8 @@ import { Rng } from 'arcade-kit/rng';
 export type Weapon = WeaponKind;
 export const MAX_LEVEL = 5;
 export const MAX_MISSILES = 5;
+/** Weapon pickups per new power level. */
+export const PICKUPS_PER_LEVEL = 2;
 export const MAX_BOMBS = 7;
 /** Extra lives at these scores. */
 export const EXTENDS = [200000, 500000];
@@ -44,6 +46,10 @@ export interface Player {
   owned: Weapon[];
   /** Power level, shared by every weapon. */
   level: number;
+  /** Weapon pickups toward the next level. */
+  charge: number;
+  /** Highest level reached; up to it again, every pickup is a full level. */
+  peak: number;
   missiles: number;
   bombs: number;
   /** -1 banking left .. 1 banking right. */
@@ -257,7 +263,7 @@ export class World {
 
   private freshPlayer(id: number, lives: number): Player {
     return {
-      id, lives, x: W / 2, y: H - 48, alive: true, timer: 0, invuln: 120, weapon: 'vulcan', owned: ['vulcan'], level: 1, missiles: 0,
+      id, lives, x: W / 2, y: H - 48, alive: true, timer: 0, invuln: 120, weapon: 'vulcan', owned: ['vulcan'], level: 1, charge: 0, peak: 1, missiles: 0,
       bombs: START_BOMBS, bank: 0, cooldown: 0, missileCooldown: 0, shield: this.shielded, shieldT: 0,
     };
   }
@@ -579,10 +585,9 @@ export class World {
     this.debris(p.x, p.y, 24, '#f8d838');
     this.shake = 20;
     sfx.die();
-    // A lost ship costs half your levels, rounded down but at least one: weapon and missiles alike.
-    const lose = (n: number) => Math.max(1, Math.floor(n / 2));
-    p.level = Math.max(1, p.level - lose(p.level));
-    p.missiles = Math.max(0, p.missiles - lose(p.missiles));
+    // A lost ship costs one level, weapon and missiles alike; the next weapon pickup brings it back.
+    p.level = Math.max(1, p.level - 1);
+    p.missiles = Math.max(0, p.missiles - 1);
     p.bombs = Math.max(p.bombs, START_BOMBS);
     this.bullets = [];
   }
@@ -752,14 +757,21 @@ export class World {
     const said = (text: string) => this.popup(p.x, p.y - 22, text);
     const lv = (n: number, max: number) => (n >= max ? 'MAX' : String(n));
     if ((WEAPONS as ItemKind[]).includes(it.kind)) {
-      // Every weapon powers up and is put in your hands; one you haven't got joins the arsenal.
+      // Every weapon is put in your hands and powers up; one you haven't got joins the arsenal. A
+      // new level takes PICKUPS_PER_LEVEL of them, but levels lost with a ship come back one each.
       const k = it.kind as WeaponKind;
       const fresh = this.arm(p, k);
       const switched = p.weapon !== k;
       if (switched) (p.weapon = k), (p.cooldown = 0);
-      if (p.level < MAX_LEVEL) p.level++;
-      else if (!switched) return bonus('5000');
-      said(fresh ? `NEW ${k.toUpperCase()}` : `${k.toUpperCase()} ${lv(p.level, MAX_LEVEL)}`);
+      if (p.level >= MAX_LEVEL) {
+        if (!switched) return bonus('5000');
+      } else if (p.level < p.peak) p.level++;
+      else if (++p.charge >= PICKUPS_PER_LEVEL) {
+        p.level++;
+        p.charge = 0;
+        p.peak = p.level;
+      }
+      said(fresh ? `NEW ${k.toUpperCase()}` : `${k.toUpperCase()} ${lv(p.level, MAX_LEVEL)}${p.charge ? '+' : ''}`);
     } else if (it.kind === 'missile') {
       if (p.missiles < MAX_MISSILES) p.missiles++;
       else return bonus('5000');

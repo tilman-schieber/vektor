@@ -905,6 +905,11 @@ function drawStatus(ctx: Ctx, w: World, p: Player, x0: number, frame: number) {
     }
   };
   pips(x0 + 14, p.level, MAX_LEVEL, color, 5);
+  // Halfway to the next level: the next pip half lit.
+  if (p.charge && p.level < MAX_LEVEL) {
+    ctx.fillStyle = color;
+    ctx.fillRect(x0 + 14 + p.level * 6, y + 4, 5, 2);
+  }
   ctx.fillStyle = '#58d854';
   ctx.fillRect(x0 + 45, y, 7, 8);
   drawText(ctx, 'M', x0 + 46, y + 1, '#000');

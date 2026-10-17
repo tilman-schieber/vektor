@@ -12,7 +12,7 @@ Easy mode (MODE on the title screen) gives the ship a shield that takes the firs
 
 ## Weapons and items
 
-Carriers drop items when shot down, each a little weapon of its own. There are three main weapons and one power level, up to 5, for whichever you fly. You start with the vulcan; a weapon pickup puts that weapon in your hands (adding it to your arsenal if it's new) and raises the level. At level 5 the plasma's lightning reaches across the whole screen. Switch between the ones you have with C (a shoulder button on a gamepad, SWAP on a phone).
+Carriers drop items when shot down, each a little weapon of its own. There are three main weapons and one power level, up to 5, for whichever you fly. You start with the vulcan; a weapon pickup puts that weapon in your hands (adding it to your arsenal if it's new), and every two raise the level (the panel shows a half pip in between). At level 5 the plasma's lightning reaches across the whole screen. Switch between the ones you have with C (a shoulder button on a gamepad, SWAP on a phone).
 
 | Item | What it does |
 | --- | --- |
@@ -23,7 +23,7 @@ Carriers drop items when shot down, each a little weapon of its own. There are t
 | Bomb (yellow) | One more bomb, up to 7 |
 | Medal | Hidden in bunkers. Each is worth 500 more than the last, up to 10000; miss one and it is back to 500 |
 
-A bomb clears every bullet on screen, hurts everything in sight and keeps you safe while it burns. Losing a ship costs half your weapon level and half your missiles (you keep your weapons), rounded down but at least one each (so level 5 drops to 3, level 2 to 1), and you start the next ship with at least 3 bombs.
+A bomb clears every bullet on screen, hurts everything in sight and keeps you safe while it burns. Losing a ship costs one weapon level and one missile (you keep your weapons), and you start the next ship with at least 3 bombs. Up to the highest level you had, each weapon pickup is a whole level again, so the next one brings it back.
 
 ## The stages
 

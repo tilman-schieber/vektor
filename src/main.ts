@@ -263,7 +263,7 @@ if (import.meta.env.DEV) {
     power: (level: number, weapon?: 'vulcan' | 'laser', missiles = 0) => {
       const p = game.world?.player;
       if (!p) return;
-      p.level = level;
+      p.level = p.peak = level;
       if (weapon) p.weapon = weapon;
       p.missiles = missiles;
     },

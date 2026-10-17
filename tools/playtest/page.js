@@ -434,7 +434,7 @@
     const w = (game.world = new M.World(M.makeRng(cfg.seed), md.lives, md.shield, cfg.players || 1));
     game.settings.players = cfg.players || 1;
     if (cfg.first > 0) w.goTo(cfg.first);
-    if (cfg.power) for (const q of w.players) Object.assign(q, { level: cfg.power.level, missiles: cfg.power.missiles });
+    if (cfg.power) for (const q of w.players) Object.assign(q, { level: cfg.power.level, peak: cfg.power.level, missiles: cfg.power.missiles });
     // A weapon to test: in hand from the start.
     if (cfg.weapon) for (const q of w.players) (w.arm(q, cfg.weapon), (q.weapon = cfg.weapon));
     w.god = !!cfg.god;

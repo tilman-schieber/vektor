@@ -463,7 +463,7 @@ export class Game {
       if (k >= '1' && k <= String(STAGES.length)) this.gotoStage(Number(k));
       else if (k === 'N') this.gotoStage(w.stageIdx + 2);
       else if (k === 'B') this.bossNow();
-      else if (k === 'U') for (const p of w.players) Object.assign(p, { level: MAX_LEVEL, missiles: MAX_MISSILES, bombs: MAX_BOMBS, owned: [...WEAPONS] });
+      else if (k === 'U') for (const p of w.players) Object.assign(p, { level: MAX_LEVEL, peak: MAX_LEVEL, charge: 0, missiles: MAX_MISSILES, bombs: MAX_BOMBS, owned: [...WEAPONS] });
       else if (k === 'I') w.god = !w.god;
       else if (k === 'V')
         for (const p of w.players) {
