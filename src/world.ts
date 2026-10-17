@@ -497,7 +497,7 @@ export class World {
     for (let n = 0; n <= p.level; n++) {
       let best: Enemy | null = null, bd = Infinity;
       for (const e of this.enemies) {
-        if (hit.has(e) || !hittable(e)) continue;
+        if (hit.has(e) || !hittable(e) || this.behindShield(e, x, y)) continue;
         // Ahead of the ship counts as nearer.
         const d = Math.hypot(e.x - x, e.y - y) + (n === 0 && e.y > p.y ? 40 : 0);
         if (d < reach && d < bd) (bd = d), (best = e);
@@ -513,6 +513,14 @@ export class World {
     if (!hit.size) pts.push(p.x + (this.rng() - 0.5) * 16, p.y - 30 - this.rng() * 10);
     this.bolts.push({ pts, t: 0, level: p.level });
     for (const e of hit) this.damage(e, e.def.name === 'part' ? dmg * PLASMA_VS_BOSS : dmg);
+  }
+
+  /** True if a shield (the frigate's) stands between (x, y) and e: a bolt only gets in through its gap. */
+  private behindShield(e: Enemy, x: number, y: number) {
+    if (!e.def.blocks) return false;
+    const d = Math.hypot(e.x - x, e.y - y);
+    for (let s = 0; s < d; s += 4) if (e.def.blocks(e, x + ((e.x - x) * s) / d, y + ((e.y - y) * s) / d)) return true;
+    return false;
   }
 
   private fire(p: Player) {

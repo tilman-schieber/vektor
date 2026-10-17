@@ -392,6 +392,21 @@ const trainCar: EnemyDef = {
 /** Where a lava boat's gun sits, below its centre. */
 export const LAVABOAT_GUN = -2;
 
+/**
+ * The middle of the lava channel at screen row y nearest to x, looking up to `span` px either way;
+ * null if there's no lava there.
+ */
+function channel(w: World, x: number, y: number, span = 24) {
+  const lava = (px: number) => px > 0 && px < W && w.terrain.levelAt(px, y, w.dist) === 0;
+  let at: number | null = null;
+  for (let d = 0; d <= span && at === null; d += 3) at = lava(x - d) ? x - d : lava(x + d) ? x + d : null;
+  if (at === null) return null;
+  let lo = at, hi = at;
+  while (lo - 3 > at - span && lava(lo - 3)) lo -= 3;
+  while (hi + 3 < at + span && lava(hi + 3)) hi += 3;
+  return (lo + hi) / 2;
+}
+
 /** Lava boat: sails a lava river like a destroyer, one gun amidships. */
 const lavaboat: EnemyDef = {
   name: 'lavaboat',
@@ -402,8 +417,13 @@ const lavaboat: EnemyDef = {
   ground: true,
   sinks: true,
   update(e, w) {
-    e.vx = e.p[1] ?? 0;
-    e.vy = w.scroll - (e.p[0] ?? 0.2);
+    // Up the river against the flow, keeping to the middle of the channel just ahead; with no lava
+    // ahead it lies still.
+    // Where two rivers run together it keeps to its own, and it never steers sideways onto rock.
+    const mid = channel(w, e.x, e.y - 14);
+    e.vx = mid === null ? 0 : Math.max(-0.8, Math.min(0.8, (mid - e.x) * 0.08));
+    if (e.vx && w.terrain.levelAt(e.x + Math.sign(e.vx) * 8, e.y, w.dist) !== 0) e.vx = 0;
+    e.vy = w.scroll - (mid === null ? 0 : (e.p[0] ?? 0.2));
     turn(e, aimAt(w, e.x, e.y), 0.05);
     if (e.y > 12 && e.t % 60 === 30) fan(w, e.x + Math.sin(e.aim) * 9, e.y + LAVABOAT_GUN + Math.cos(e.aim) * 9, e.aim, 2 + loopShots(w), 0.18, 2.0);
   },

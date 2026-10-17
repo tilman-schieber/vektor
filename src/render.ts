@@ -657,7 +657,7 @@ function drawFrigateShield(ctx: Ctx, e: Enemy, frame: number) {
     ctx.strokeStyle = color;
     ctx.lineWidth = width;
     ctx.beginPath();
-    ctx.arc(e.x, e.y, SHIELD_R, -to, -from);
+    ctx.arc(e.x, e.y, SHIELD_R, from, to);
     ctx.stroke();
   }
   ctx.restore();
