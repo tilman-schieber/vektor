@@ -152,10 +152,11 @@ const PLASMA_VS_BOSS = 0.6;
 const PLASMA_REACH = [140, 190, 250, 320, 400];
 const PLASMA_JUMP = [70, 110, 170, 260, 400];
 
-/** A plasma bolt for the screen: the points it runs through, and frames it has shown. */
+/** A plasma bolt for the screen: the points it runs through, frames it has shown, and the weapon level. */
 export interface Bolt {
   pts: number[];
   t: number;
+  level: number;
 }
 
 export class World {
@@ -510,7 +511,7 @@ export class World {
     }
     // Nothing in reach: a short crackle off the nose.
     if (!hit.size) pts.push(p.x + (this.rng() - 0.5) * 16, p.y - 30 - this.rng() * 10);
-    this.bolts.push({ pts, t: 0 });
+    this.bolts.push({ pts, t: 0, level: p.level });
     for (const e of hit) this.damage(e, e.def.name === 'part' ? dmg * PLASMA_VS_BOSS : dmg);
   }
 

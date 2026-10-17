@@ -231,35 +231,88 @@ function drawItem(ctx: Ctx, it: Item, frame: number) {
   if (!has(name)) drawTextShadow(ctx, letter, Math.round(it.x) - 2, Math.round(it.y) - 3 + bob);
 }
 
-/** Plasma bolts: jagged violet lightning with a white core, new zigzags every frame. */
+/**
+ * Plasma bolts: jagged violet lightning with a white core, new zigzags every frame. Each level
+ * makes it thicker and wilder: side forks from 2, a second strand and burst rings where it strikes
+ * from 4, and at MAX a white-hot core.
+ */
 function drawBolts(ctx: Ctx, w: World, frame: number) {
   ctx.save();
   ctx.globalCompositeOperation = 'lighter';
   ctx.lineJoin = 'round';
-  for (const b of w.bolts) {
-    const path: [number, number][] = [];
-    for (let i = 0; i + 3 < b.pts.length; i += 2) {
-      const [x0, y0, x1, y1] = b.pts.slice(i, i + 4);
-      const len = Math.hypot(x1 - x0, y1 - y0) || 1;
-      const nx = -(y1 - y0) / len, ny = (x1 - x0) / len;
-      const n = Math.max(2, Math.round(len / 10));
-      for (let k = 0; k < n; k++) {
-        const f = k / n, h = hash(frame * 31 + i * 7 + k);
-        const off = k ? ((h % 9) - 4) * Math.min(1, len / 40) : 0;
-        path.push([x0 + (x1 - x0) * f + nx * off, y0 + (y1 - y0) * f + ny * off]);
-      }
-      if (i + 4 >= b.pts.length) path.push([x1, y1]);
-    }
+  ctx.lineCap = 'round';
+  const stroke = (path: [number, number][], width: number, color: string) => {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    path.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.stroke();
+  };
+  for (const [bi, b] of w.bolts.entries()) {
+    const lv = b.level, max = lv >= MAX_LEVEL;
     const fade = 1 - b.t / 4;
-    for (const [width, color] of [[7, `rgba(120,40,248,${0.5 * fade})`], [3, `rgba(176,96,248,${fade})`], [1, `rgba(240,220,252,${fade})`]] as const) {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = width;
-      ctx.beginPath();
-      path.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-      ctx.stroke();
+    // One jagged run through the points; `seed` gives each strand its own zigzags.
+    const strand = (seed: number) => {
+      const path: [number, number][] = [];
+      for (let i = 0; i + 3 < b.pts.length; i += 2) {
+        const [x0, y0, x1, y1] = b.pts.slice(i, i + 4);
+        const len = Math.hypot(x1 - x0, y1 - y0) || 1;
+        const nx = -(y1 - y0) / len, ny = (x1 - x0) / len;
+        const n = Math.max(2, Math.round(len / 10));
+        const amp = (0.8 + lv * 0.25) * Math.min(1, len / 40);
+        for (let k = 0; k < n; k++) {
+          const f = k / n, h = hash(frame * 31 + i * 7 + k + seed * 1013 + bi * 57);
+          const off = k ? ((h % 9) - 4) * amp : 0;
+          path.push([x0 + (x1 - x0) * f + nx * off, y0 + (y1 - y0) * f + ny * off]);
+        }
+        if (i + 4 >= b.pts.length) path.push([x1, y1]);
+      }
+      return path;
+    };
+    const main = strand(0);
+    const core = max ? `rgba(255,255,255,${fade})` : `rgba(240,220,252,${fade})`;
+    stroke(main, 5 + lv * 2.5, `rgba(120,40,248,${(0.35 + lv * 0.05) * fade})`);
+    stroke(main, 2 + lv, `rgba(176,96,248,${fade})`);
+    stroke(main, 1 + (lv >> 1), core);
+    // A second, thinner strand winds round the first.
+    if (lv >= 4) {
+      const second = strand(1);
+      stroke(second, 2 + (lv - 3), `rgba(150,70,248,${0.8 * fade})`);
+      stroke(second, 1, `rgba(220,190,252,${fade})`);
     }
-    // Where it strikes, a spark.
-    for (let i = 2; i < b.pts.length; i += 2) disc(ctx, b.pts[i], b.pts[i + 1], 3 - b.t * 0.5, `rgba(220,180,252,${fade})`);
+    // Side forks that crackle off the main strand.
+    if (lv >= 2)
+      for (let k = 1; k < main.length - 1; k++) {
+        const h = hash(frame * 17 + k * 131 + bi * 7);
+        if (h % 10 >= lv * 1.5) continue;
+        const fork: [number, number][] = [main[k]];
+        let [x, y] = main[k];
+        const a = ((h >>> 8) % 628) / 100;
+        for (let s = 0; s < 2 + (lv >> 1); s++) {
+          const hs = hash(h + s * 97);
+          const step = 4 + (hs % 4) + lv;
+          x += Math.cos(a + (((hs >>> 4) % 9) - 4) * 0.2) * step;
+          y += Math.sin(a + (((hs >>> 4) % 9) - 4) * 0.2) * step;
+          fork.push([x, y]);
+        }
+        stroke(fork, 1 + (lv >> 2), `rgba(176,96,248,${0.9 * fade})`);
+        stroke(fork, 1, `rgba(230,210,252,${0.7 * fade})`);
+      }
+    // A charge crackling on the nose.
+    disc(ctx, b.pts[0], b.pts[1], (1 + lv * 0.8) * fade + (frame % 2), `rgba(176,96,248,${0.6 * fade})`);
+    disc(ctx, b.pts[0], b.pts[1], (0.5 + lv * 0.4) * fade, core);
+    // Where it strikes, a spark, and from level 4 a ring bursting out.
+    for (let i = 2; i < b.pts.length; i += 2) {
+      const x = b.pts[i], y = b.pts[i + 1];
+      disc(ctx, x, y, 2 + lv * 0.8 - b.t * 0.5, `rgba(220,180,252,${fade})`);
+      if (lv >= 4) {
+        ctx.strokeStyle = `rgba(200,150,252,${0.8 * fade})`;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(x, y, 4 + b.t * (lv - 1), 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
   }
   ctx.restore();
 }
