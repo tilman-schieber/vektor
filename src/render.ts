@@ -1237,7 +1237,7 @@ function renderTitle(ctx: Ctx, game: Game, frame: number) {
   if (game.debug) {
     drawTextCentered(ctx, 'DEBUG - NO HIGH SCORES', W / 2, 240, YELLOW);
     drawTextCentered(ctx, '1-6 STAGE  N NEXT  B BOSS', W / 2, 256, LIGHT);
-    drawTextCentered(ctx, 'U POWER  I INVINCIBLE  V WEAPON', W / 2, 268, LIGHT);
+    drawTextCentered(ctx, 'U POWER  I INVINCIBLE', W / 2, 268, LIGHT);
   }
 }
 
