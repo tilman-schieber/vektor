@@ -18,7 +18,7 @@ Carriers drop items when shot down, each a little weapon of its own. There are t
 | --- | --- |
 | Gatling (red) | Vulcan: a spread that widens with every level |
 | Emitter (blue) | Laser: a narrow beam that bends after the ship and goes through what it hits. The strongest against bosses, though their armour takes some of its edge off |
-| Tesla coil (violet) | Plasma: lightning that finds the nearest enemy by itself and jumps on to the next, one more each level. Made for swarms, weak against bosses |
+| Tesla coil (violet) | Plasma: lightning that finds the nearest enemy by itself and jumps on to the next, one more each level. Made for swarms and for flying without aiming; boss armour takes some of its bite, so the laser stays the boss weapon |
 | Missile pod (green) | Homing missiles, on top of any weapon, up to 5; a full rack of five reloads faster |
 | Bomb (yellow) | One more bomb, up to 7 |
 | Medal | Hidden in bunkers. Each is worth 500 more than the last, up to 10000; miss one and it is back to 500 |

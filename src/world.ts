@@ -146,6 +146,8 @@ const SCROLL = 0.5;
 const PLASMA_RATE = 6;
 /** How much of a laser's damage gets through a boss's armour. */
 const LASER_VS_BOSS = 0.65;
+/** And of a plasma bolt's: its chain hits every part at once. */
+const PLASMA_VS_BOSS = 0.6;
 /** Plasma, per level: how far the first bolt reaches, and how far it jumps on. At MAX both span the screen. */
 const PLASMA_REACH = [140, 190, 250, 320, 400];
 const PLASMA_JUMP = [70, 110, 170, 260, 400];
@@ -483,10 +485,10 @@ export class World {
 
   /**
    * Plasma: a bolt to the nearest enemy in reach, then on from each to the nearest not yet hit,
-   * level + 1 in all. Weak on one big target, strong on many small ones.
+   * level + 1 in all. Strong on many small ones, and needs no aiming; boss armour blunts it.
    */
   private zap(p: Player) {
-    const dmg = 0.8 + p.level * 0.1;
+    const dmg = 1.2 + p.level * 0.3;
     const hittable = (e: Enemy) => !e.dead && !e.hidden && !e.armored && e.hp > 0 && e.x > 0 && e.x < W && e.y > 0 && e.y < H;
     const pts = [p.x, p.y - 12];
     const hit = new Set<Enemy>();
@@ -509,7 +511,7 @@ export class World {
     // Nothing in reach: a short crackle off the nose.
     if (!hit.size) pts.push(p.x + (this.rng() - 0.5) * 16, p.y - 30 - this.rng() * 10);
     this.bolts.push({ pts, t: 0 });
-    for (const e of hit) this.damage(e, dmg);
+    for (const e of hit) this.damage(e, e.def.name === 'part' ? dmg * PLASMA_VS_BOSS : dmg);
   }
 
   private fire(p: Player) {
